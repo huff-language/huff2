@@ -1,0 +1,9 @@
+[package]
+name = "ast"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+evm-glue.workspace = true
+alloy-dyn-abi.workspace = true

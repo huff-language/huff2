@@ -1,0 +1,17 @@
+[workspace]
+members = ["ast"]
+
+resolver = "2"
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+evm-glue = { git = "https://github.com/Philogy/evm-glue.git", rev="eafa63a1" }
+alloy-dyn-abi = "0.8.5"
+
+[profile.profiling]
+inherits = "release"
+debug = true
