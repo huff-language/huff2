@@ -49,4 +49,28 @@ mod tests {
             want
         );
     }
+
+    #[test]
+    fn table() {
+        assert_eq!(
+            grammar::ConstantParser::new().parse("#define table TEST { 0xc0fe }"),
+            Ok(ast::HuffDefinition::Codetable {
+                name: "TEST",
+                data: Box::new([0xc0, 0xfe])
+            })
+        );
+        assert_eq!(
+            grammar::ConstantParser::new().parse("#define table TEST { 0xc0fe 0xd00d }"),
+            Ok(ast::HuffDefinition::Codetable {
+                name: "TEST",
+                data: Box::new([0xc0, 0xfe, 0xd0, 0x0d])
+            })
+        );
+    }
+
+    #[test]
+    fn sol_function() {}
+
+    #[test]
+    fn sol_event() {}
 }
