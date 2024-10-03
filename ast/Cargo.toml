@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[build-dependencies]
+lalrpop = "0.22"
+
 [dependencies]
 evm-glue.workspace = true
+alloy-primitives.workspace = true
 alloy-dyn-abi.workspace = true
+
+lalrpop-util = { version = "0.22", features = ["lexer", "unicode"] }

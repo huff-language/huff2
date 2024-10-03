@@ -1,7 +1,6 @@
 [workspace]
-members = ["ast"]
-
 resolver = "2"
+members = ["bin/huff", "ast"]
 
 [workspace.package]
 version = "0.0.1"
@@ -9,8 +8,16 @@ edition = "2021"
 license = "MIT"
 
 [workspace.dependencies]
-evm-glue = { git = "https://github.com/Philogy/evm-glue.git", rev="eafa63a1" }
+
+# workspace
+ast = { path = "ast" }
+
 alloy-dyn-abi = "0.8.5"
+alloy-primitives = "0.8.5"
+ariadne = { version = "0.4.1", features = ["auto-color"] }
+clap = { version = "4", features = ["derive"] }
+evm-glue = { git = "https://github.com/Philogy/evm-glue.git", rev = "eafa63a1" }
+thiserror = "1"
 
 [profile.profiling]
 inherits = "release"

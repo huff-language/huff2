@@ -1,7 +1,16 @@
+mod parser;
+
+pub use parser::parse;
+
+lalrpop_util::lalrpop_mod!(grammar);
+
 use alloy_dyn_abi::DynSolType;
+use alloy_primitives::U256;
 use evm_glue::opcodes::Opcode;
 
-#[derive(Debug)]
+pub struct Root<'src>(pub Box<[HuffDefinition<'src>]>);
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum BuiltinInvoke<'src> {
     TableStart(&'src str),
     TableSize(&'src str),
@@ -11,13 +20,13 @@ pub enum BuiltinInvoke<'src> {
     EventSig(&'src str),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum MacroExpr<'src> {
     Op(Opcode),
     MacroArgReference(&'src str),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum MacroStatement<'src> {
     LabelDefinition(&'src str),
     LabelReference(&'src str),
@@ -29,34 +38,35 @@ pub enum MacroStatement<'src> {
     Expr(MacroExpr<'src>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Jumptable<'src> {
     pub name: &'src str,
     pub size: u8,
     pub labels: Box<[&'src str]>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Macro<'src> {
     pub name: &'src str,
     pub body: Box<[MacroStatement<'src>]>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct AbiFunction<'src> {
     pub name: &'src str,
     pub args: Box<[DynSolType]>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct AbiEvent<'src> {
     pub name: &'src str,
     pub args: Box<[DynSolType]>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum HuffDefinition<'src> {
     Macro(Macro<'src>),
+    Constant { name: &'src str, value: U256 },
     Jumptable(Jumptable<'src>),
     Codetable { name: &'src str, data: Box<[u8]> },
     AbiFunction(AbiFunction<'src>),

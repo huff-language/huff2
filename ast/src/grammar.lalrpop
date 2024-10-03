@@ -1,0 +1,19 @@
+use std::str::FromStr;
+use alloy_primitives::U256;
+use crate as ast;
+
+grammar;
+
+pub Root: ast::Root<'input> = {
+    <c:Constant*> =>ast::Root(c.into_iter().collect()),
+};
+
+pub Constant: ast::HuffDefinition<'input> = {
+    "#define" "constant" <name:Identifier> "=" <value:Word> => ast::HuffDefinition::Constant { name, value }
+};
+
+Identifier: &'input str = <s:r"[a-zA-Z_][a-zA-Z0-9_]*"> => s;
+
+Word: U256 = <s:r"[0-9]+"> => U256::from_str_radix(s, 10).unwrap();
+
+Whitespace: () = r#"[ \t\r\n]*"# => ();
