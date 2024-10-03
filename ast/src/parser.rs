@@ -23,7 +23,9 @@ mod tests {
         assert_eq!(
             grammar::WordParser::new()
                 .parse("0x10000000000000000000000000000000000000000000000000000000000000000"),
-            Ok(U256::MAX + uint!(1_U256))
+            Err(ParseError::User {
+                error: "number is too big"
+            })
         );
     }
 
