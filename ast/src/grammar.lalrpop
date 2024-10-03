@@ -1,27 +1,43 @@
-use alloy_primitives::U256;
+use alloy_primitives::{Bytes, U256};
 use lalrpop_util::ParseError;
 use crate as ast;
 
 grammar;
 
 pub Root: ast::Root<'input> = {
-    <c:Constant*> =>ast::Root(c.into_iter().collect()),
+    <def:Definition*> => ast::Root(def.into_iter().collect()),
+};
+
+pub Definition: ast::HuffDefinition<'input> = {
+    "#define" <c:Constant> => c,
+    "#define" <t:Table> => t,
+    "#define" <f:SolFunction> => f,
+    "#define" <e:SolEvent> => e,
+    "#define" <e:SolError> => e,
 };
 
 pub Constant: ast::HuffDefinition<'input> = {
-    "#define" "constant" <name:Identifier> "=" <value:Word> => ast::HuffDefinition::Constant { name, value }
+    "constant" <name:Identifier> "=" <value:Word> => ast::HuffDefinition::Constant { name, value }
 };
+
+pub Table: ast::HuffDefinition<'input> = {};
+
+pub SolFunction: ast::HuffDefinition<'input> = {};
+
+pub SolEvent: ast::HuffDefinition<'input> = {};
+
+pub SolError: ast::HuffDefinition<'input> = {};
 
 pub Identifier: &'input str = <s:r"[a-zA-Z_][a-zA-Z0-9_]*"> => s;
 
 pub Word: U256 = {
     <s:r"0x[0-9a-f]+"> =>? U256::from_str_radix(&s[2..], 16).map_err(|_| ParseError::User { error: "number is too big" }),
+    <s:r"0b[01]+"> =>? U256::from_str_radix(&s[2..], 2).map_err(|_| ParseError::User { error: "number is too big" }),
 };
-
 
 match {
     r"\s+" => {},                  // whitespace
-    r"//[^\n\r]*[\n\r]*" => { },   // single-line comments
+    r"//[^\n\r]*[\n\r]*" => {},    // single-line comments
     r"/\*([^*]|\*[^/])*\*/" => {}, // multi-line comments
     _
 }
