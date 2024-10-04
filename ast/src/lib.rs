@@ -55,10 +55,17 @@ pub struct Macro<'src> {
 pub struct AbiFunction<'src> {
     pub name: &'src str,
     pub args: Box<[DynSolType]>,
+    pub rets: Box<[DynSolType]>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct AbiEvent<'src> {
+    pub name: &'src str,
+    pub args: Box<[DynSolType]>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct AbiError<'src> {
     pub name: &'src str,
     pub args: Box<[DynSolType]>,
 }
@@ -71,4 +78,5 @@ pub enum HuffDefinition<'src> {
     Codetable { name: &'src str, data: Box<[u8]> },
     AbiFunction(AbiFunction<'src>),
     AbiEvent(AbiEvent<'src>),
+    AbiError(AbiError<'src>),
 }

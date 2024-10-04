@@ -26,7 +26,21 @@ mod tests {
             grammar::WordParser::new()
                 .parse("0x10000000000000000000000000000000000000000000000000000000000000000"),
             Err(ParseError::User {
-                error: "number is too big"
+                error: "the value is too large to fit the target type"
+            })
+        );
+    }
+
+    #[test]
+    fn code() {
+        assert_eq!(
+            grammar::CodeParser::new().parse("0xc0de"),
+            Ok(vec![0xc0, 0xde])
+        );
+        assert_eq!(
+            grammar::CodeParser::new().parse("0x0"),
+            Err(ParseError::User {
+                error: "odd number of digits"
             })
         );
     }
@@ -34,7 +48,7 @@ mod tests {
     #[test]
     fn constant() {
         assert_eq!(
-            grammar::ConstantParser::new().parse("#define constant TEST = 0x1"),
+            grammar::ConstantParser::new().parse("constant TEST = 0x1"),
             Ok(ast::HuffDefinition::Constant {
                 name: "TEST",
                 value: uint!(1_U256),
@@ -42,7 +56,7 @@ mod tests {
         );
         assert_eq!(
             grammar::ConstantParser::new()
-                .parse(" #define constant TEST /* comment */ = 0b1101 // comment"),
+                .parse(" constant TEST /* comment */ = 0b1101 // comment"),
             Ok(ast::HuffDefinition::Constant {
                 name: "TEST",
                 value: uint!(13_U256),
@@ -53,18 +67,45 @@ mod tests {
     #[test]
     fn table() {
         assert_eq!(
-            grammar::TableParser::new().parse("#define table TEST { 0xc0fe }"),
+            grammar::TableParser::new().parse("table TEST { 0xc0de }"),
             Ok(ast::HuffDefinition::Codetable {
                 name: "TEST",
-                data: Box::new([0xc0, 0xfe])
+                data: Box::new([0xc0, 0xde])
             })
         );
         assert_eq!(
-            grammar::TableParser::new().parse("#define table TEST { 0xc0fe 0xd00d }"),
+            grammar::TableParser::new().parse("table TEST { 0xc0de 0xcc00ddee }"),
             Ok(ast::HuffDefinition::Codetable {
                 name: "TEST",
-                data: Box::new([0xc0, 0xfe, 0xd0, 0x0d])
+                data: Box::new([0xc0, 0xde, 0xcc, 0x00, 0xdd, 0xee])
             })
+        );
+    }
+
+    #[test]
+    fn sol_type_list() {
+        assert_eq!(
+            grammar::SolTypeListParser::new().parse("(address, uint256)"),
+            Ok(vec![
+                DynSolType::parse("address").unwrap(),
+                DynSolType::parse("uint256").unwrap()
+            ]
+            .into_boxed_slice())
+        );
+        assert_eq!(
+            grammar::SolTypeListParser::new().parse("(address[] tokens)"),
+            Ok(vec![DynSolType::parse("address[]").unwrap(),].into_boxed_slice())
+        );
+        assert_eq!(
+            grammar::SolTypeListParser::new().parse("(address[3] tokens)"),
+            Ok(vec![DynSolType::parse("address[3]").unwrap(),].into_boxed_slice())
+        );
+        assert_eq!(
+            grammar::SolTypeListParser::new().parse("((address, (address to, uint256 amount)[]))"),
+            Ok(
+                vec![DynSolType::parse("(address,(address,uint256)[])").unwrap(),]
+                    .into_boxed_slice()
+            )
         );
     }
 
@@ -72,10 +113,11 @@ mod tests {
     fn sol_function() {
         assert_eq!(
             grammar::SolFunctionParser::new()
-                .parse("#define function balanceOf(address) returns (uint256)"),
+                .parse("function balanceOf(address) returns (uint256)"),
             Ok(ast::HuffDefinition::AbiFunction(ast::AbiFunction {
                 name: "balanceOf",
                 args: Box::new([DynSolType::parse("address").unwrap()]),
+                rets: Box::new([DynSolType::parse("uint256").unwrap()]),
             }))
         );
     }
@@ -84,14 +126,25 @@ mod tests {
     fn sol_event() {
         assert_eq!(
             grammar::SolEventParser::new()
-                .parse("#define event Transfer(address from, address to, uint256 value)"),
+                .parse("event Transfer(address from, address to, uint256 value)"),
             Ok(ast::HuffDefinition::AbiEvent(ast::AbiEvent {
                 name: "Transfer",
                 args: Box::new([
-                    DynSolType::parse("address from").unwrap(),
-                    DynSolType::parse("address to").unwrap(),
-                    DynSolType::parse("uint256 value").unwrap()
+                    DynSolType::parse("address").unwrap(),
+                    DynSolType::parse("address").unwrap(),
+                    DynSolType::parse("uint256").unwrap()
                 ]),
+            }))
+        );
+    }
+
+    #[test]
+    fn sol_error() {
+        assert_eq!(
+            grammar::SolErrorParser::new().parse("error PanicError(uint256)"),
+            Ok(ast::HuffDefinition::AbiError(ast::AbiError {
+                name: "PanicError",
+                args: Box::new([DynSolType::parse("uint256").unwrap(),]),
             }))
         );
     }

@@ -1,4 +1,5 @@
-use alloy_primitives::{Bytes, U256};
+use alloy_primitives::{hex::FromHex, Bytes, U256};
+use alloy_dyn_abi::DynSolType;
 use lalrpop_util::ParseError;
 use crate as ast;
 
@@ -9,6 +10,7 @@ pub Root: ast::Root<'input> = {
 };
 
 pub Definition: ast::HuffDefinition<'input> = {
+    "#define" <m:Macro> => m,
     "#define" <c:Constant> => c,
     "#define" <t:Table> => t,
     "#define" <f:SolFunction> => f,
@@ -16,28 +18,123 @@ pub Definition: ast::HuffDefinition<'input> = {
     "#define" <e:SolError> => e,
 };
 
+pub Macro: ast::HuffDefinition<'input> = {};
+
 pub Constant: ast::HuffDefinition<'input> = {
-    "constant" <name:Identifier> "=" <value:Word> => ast::HuffDefinition::Constant { name, value }
+    "constant" <name:IDENT> "=" <value:Word> => ast::HuffDefinition::Constant { name, value }
 };
 
-pub Table: ast::HuffDefinition<'input> = {};
+pub Table: ast::HuffDefinition<'input> = {
+    "table" <name:IDENT> "{" <code:Code+> "}" => {
+        let data = code.into_iter().flatten().collect::<Vec<u8>>().into_boxed_slice();
+        ast::HuffDefinition::Codetable { name, data }
+    },
+};
 
-pub SolFunction: ast::HuffDefinition<'input> = {};
+pub SolFunction: ast::HuffDefinition<'input> = {
+    "function" <name:IDENT> <args:SolTypeList> <rets:("returns" SolTypeList)?> => {
+        let rets = rets.map(|(_, t)| t).unwrap_or_else(|| Box::new([]));
+        ast::HuffDefinition::AbiFunction(ast::AbiFunction{ name, args, rets })
+    }
+};
 
-pub SolEvent: ast::HuffDefinition<'input> = {};
+pub SolEvent: ast::HuffDefinition<'input> = {
+    "event" <name:IDENT> <args:SolTypeList> => ast::HuffDefinition::AbiEvent(ast::AbiEvent{ name, args })
+};
 
-pub SolError: ast::HuffDefinition<'input> = {};
+pub SolError: ast::HuffDefinition<'input> = {
+    "error" <name:IDENT> <args:SolTypeList> => ast::HuffDefinition::AbiError(ast::AbiError{ name, args })
+};
 
-pub Identifier: &'input str = <s:r"[a-zA-Z_][a-zA-Z0-9_]*"> => s;
+pub SolTypeList: Box<[DynSolType]> = {
+    "(" ")" => Box::new([]),
+    "(" <first:SolType> <rest:("," SolType)*>  ")" => {
+        let mut list = vec![first];
+        list.extend(rest.into_iter().map(|(_, t)| t));
+        list.into_boxed_slice()
+    }
+};
+
+pub SolType: DynSolType = {
+    <t:SolRawType> =>? DynSolType::parse(t).map_err(|_| ParseError::User { error: "XXX" })
+};
+
+pub SolRawType: &'input str = {
+    <t:SolRawPrimitiveType> <ex:("[" DEC? "]")?> IDENT? => {
+        let mut result = t.to_string();
+        if let Some(ex) = ex {
+            result.push_str(ex.0);
+            if let Some(num) = ex.1 {
+                result.push_str(num);
+            }
+            result.push_str(ex.2);
+        }
+        Box::leak(result.into_boxed_str())
+    },
+    <t:SolRawTupleType> <ex:("[" DEC? "]")?> IDENT? => {
+        let mut result = t.to_string();
+        if let Some(ex) = ex {
+            result.push_str(ex.0);
+            if let Some(num) = ex.1 {
+                result.push_str(num);
+            }
+            result.push_str(ex.2);
+        }
+        Box::leak(result.into_boxed_str())
+    },
+};
+
+pub SolRawPrimitiveType: &'input str = {
+    <t:IDENT> => t
+};
+
+pub SolRawTupleType: &'input str = {
+    "(" <fist:SolRawType> <rest:("," SolRawType)*> ")" => {
+        let mut result = "(".to_string();
+        result.push_str(fist);
+        rest.into_iter().for_each(|(_, t)| {
+            result.push_str(",");
+            result.push_str(t);
+        });
+        result.push_str(")");
+        Box::leak(result.into_boxed_str())
+    }
+}
 
 pub Word: U256 = {
-    <s:r"0x[0-9a-f]+"> =>? U256::from_str_radix(&s[2..], 16).map_err(|_| ParseError::User { error: "number is too big" }),
-    <s:r"0b[01]+"> =>? U256::from_str_radix(&s[2..], 2).map_err(|_| ParseError::User { error: "number is too big" }),
+    <s:HEX> =>? U256::from_str_radix(&s[2..], 16).map_err(|e| {
+        let error_str: &'static str = Box::leak(e.to_string().into_boxed_str());
+        ParseError::User { error: error_str }
+    }),
+    <s:BIN> =>? U256::from_str_radix(&s[2..], 2).map_err(|e| {
+        let error_str: &'static str = Box::leak(e.to_string().into_boxed_str());
+        ParseError::User { error: error_str }
+    }),
+    <s:DEC> =>? U256::from_str_radix(s, 10).map_err(|e| {
+        let error_str: &'static str = Box::leak(e.to_string().into_boxed_str());
+        ParseError::User { error: error_str }
+    }),
 };
+
+pub Code: Vec<u8> = {
+    <s:HEX> =>? Bytes::from_hex(s)
+        .map(|b| b.to_vec())
+        .map_err(|e| {
+            let error_str: &'static str = Box::leak(e.to_string().into_boxed_str());
+            ParseError::User { error: error_str }
+        })
+}
 
 match {
     r"\s+" => {},                  // whitespace
     r"//[^\n\r]*[\n\r]*" => {},    // single-line comments
     r"/\*([^*]|\*[^/])*\*/" => {}, // multi-line comments
+
+    r"[a-zA-Z_][a-zA-Z0-9_]*" => IDENT, // identifier
+
+    r"0|[1-9][0-9]*" => DEC, // decimal number
+    r"0x[0-9a-f]+" => HEX,   // hexadecimal number
+    r"0b[01]+" => BIN,       // binary number
+
     _
 }
