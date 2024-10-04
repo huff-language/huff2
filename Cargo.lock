@@ -359,17 +359,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ast"
-version = "0.0.1"
-dependencies = [
- "alloy-dyn-abi",
- "alloy-primitives",
- "evm-glue",
- "lalrpop",
- "lalrpop-util",
-]
-
-[[package]]
 name = "auto_impl"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -913,12 +902,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "huff"
+name = "huff-ast"
+version = "0.0.1"
+dependencies = [
+ "alloy-dyn-abi",
+ "alloy-primitives",
+ "evm-glue",
+ "lalrpop",
+ "lalrpop-util",
+]
+
+[[package]]
+name = "huff-cli"
 version = "0.0.1"
 dependencies = [
  "ariadne",
- "ast",
  "clap",
+ "huff-ast",
  "thiserror",
 ]
 
