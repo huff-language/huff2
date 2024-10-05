@@ -18,7 +18,22 @@ pub Definition: ast::HuffDefinition<'input> = {
     "#define" <e:SolError> => e,
 };
 
-pub Macro: ast::HuffDefinition<'input> = {};
+pub Macro: ast::HuffDefinition<'input> = {
+    "macro" <name:IDENT> <args:MacroArgs> "=" "takes" "(" <takes:DEC> ")" "returns" "(" <returns:DEC> ")" "{" "}" => {
+        let takes = takes.parse::<usize>().unwrap();
+        let returns = returns.parse::<usize>().unwrap();
+        ast::HuffDefinition::Macro(ast::Macro{ name, args, takes, returns, body: Box::new([]) })
+    }
+};
+
+pub MacroArgs: Box<[&'input str]> = {
+    "(" ")" => Box::new([]),
+    "(" <first:IDENT> <rest:("," IDENT)*> ")" => {
+        let mut list = vec![first];
+        list.extend(rest.into_iter().map(|(_, t)| t));
+        list.into_boxed_slice()
+    }
+};
 
 pub Constant: ast::HuffDefinition<'input> = {
     "constant" <name:IDENT> "=" <value:Word> => ast::HuffDefinition::Constant { name, value }

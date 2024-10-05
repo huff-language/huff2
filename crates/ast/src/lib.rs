@@ -48,6 +48,9 @@ pub struct Jumptable<'src> {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Macro<'src> {
     pub name: &'src str,
+    pub args: Box<[&'src str]>,
+    pub takes: usize,
+    pub returns: usize,
     pub body: Box<[MacroStatement<'src>]>,
 }
 

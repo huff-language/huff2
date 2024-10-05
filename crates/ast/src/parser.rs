@@ -13,7 +13,7 @@ mod tests {
     use alloy_primitives::{uint, U256};
 
     #[test]
-    fn word() {
+    fn word_parser() {
         assert_eq!(grammar::WordParser::new().parse("0x0"), Ok(U256::ZERO));
         assert_eq!(grammar::WordParser::new().parse("0x1"), Ok(uint!(1_U256)));
         assert_eq!(grammar::WordParser::new().parse("0b10"), Ok(uint!(2_U256)));
@@ -32,7 +32,7 @@ mod tests {
     }
 
     #[test]
-    fn code() {
+    fn code_parser() {
         assert_eq!(
             grammar::CodeParser::new().parse("0xc0de"),
             Ok(vec![0xc0, 0xde])
@@ -46,7 +46,31 @@ mod tests {
     }
 
     #[test]
-    fn constant() {
+    fn macro_parser() {
+        assert_eq!(
+            grammar::MacroParser::new().parse("macro MAIN() = takes (0) returns (0) { }"),
+            Ok(ast::HuffDefinition::Macro(ast::Macro {
+                name: "MAIN",
+                args: Box::new([]),
+                takes: 0,
+                returns: 0,
+                body: Box::new([])
+            }))
+        );
+        assert_eq!(
+            grammar::MacroParser::new().parse("macro READ_ADDRESS(offset) = takes (0) returns (1) { }"),
+            Ok(ast::HuffDefinition::Macro(ast::Macro {
+                name: "READ_ADDRESS",
+                args: Box::new(["offset"]),
+                takes: 0,
+                returns: 1,
+                body: Box::new([])
+            }))
+        );
+    }
+
+    #[test]
+    fn constant_parser() {
         assert_eq!(
             grammar::ConstantParser::new().parse("constant TEST = 0x1"),
             Ok(ast::HuffDefinition::Constant {
@@ -65,7 +89,7 @@ mod tests {
     }
 
     #[test]
-    fn table() {
+    fn table_parser() {
         assert_eq!(
             grammar::TableParser::new().parse("table TEST { 0xc0de }"),
             Ok(ast::HuffDefinition::Codetable {
@@ -83,7 +107,7 @@ mod tests {
     }
 
     #[test]
-    fn sol_type_list() {
+    fn sol_type_list_parser() {
         assert_eq!(
             grammar::SolTypeListParser::new().parse("(address, uint256)"),
             Ok(vec![
@@ -110,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn sol_function() {
+    fn sol_function_parser() {
         assert_eq!(
             grammar::SolFunctionParser::new()
                 .parse("function balanceOf(address) returns (uint256)"),
@@ -123,7 +147,7 @@ mod tests {
     }
 
     #[test]
-    fn sol_event() {
+    fn sol_event_parser() {
         assert_eq!(
             grammar::SolEventParser::new()
                 .parse("event Transfer(address from, address to, uint256 value)"),
@@ -139,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn sol_error() {
+    fn sol_error_parser() {
         assert_eq!(
             grammar::SolErrorParser::new().parse("error PanicError(uint256)"),
             Ok(ast::HuffDefinition::AbiError(ast::AbiError {

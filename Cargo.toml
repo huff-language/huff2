@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/ast", "crates/cli"]
+members = ["crates/ast"]
 
 [workspace.package]
 version = "0.0.1"
@@ -17,6 +17,7 @@ alloy-primitives = "0.8.5"
 ariadne = { version = "0.4.1", features = ["auto-color"] }
 clap = { version = "4", features = ["derive"] }
 evm-glue = { git = "https://github.com/Philogy/evm-glue.git", rev = "eafa63a1" }
+lalrpop-util = { version = "0.22", features = ["lexer", "unicode"] }
 thiserror = "1"
 
 [profile.profiling]
