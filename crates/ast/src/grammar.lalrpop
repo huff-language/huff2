@@ -1,7 +1,9 @@
-use alloy_primitives::{hex::FromHex, Bytes, U256};
 use alloy_dyn_abi::DynSolType;
+use alloy_primitives::{hex::FromHex, Bytes, U256};
+use revm_interpreter::OpCode;
 use lalrpop_util::ParseError;
 use crate as ast;
+use crate::parser::parse_opcode;
 
 grammar;
 
@@ -19,10 +21,10 @@ pub Definition: ast::HuffDefinition<'input> = {
 };
 
 pub Macro: ast::HuffDefinition<'input> = {
-    "macro" <name:IDENT> <args:MacroArgs> "=" "takes" "(" <takes:DEC> ")" "returns" "(" <returns:DEC> ")" "{" "}" => {
+    "macro" <name:IDENT> <args:MacroArgs> "=" "takes" "(" <takes:DEC> ")" "returns" "(" <returns:DEC> ")" "{" <insts:Instruction+> "}" => {
         let takes = takes.parse::<usize>().unwrap();
         let returns = returns.parse::<usize>().unwrap();
-        ast::HuffDefinition::Macro(ast::Macro{ name, args, takes, returns, body: Box::new([]) })
+        ast::HuffDefinition::Macro(ast::Macro{ name, args, takes, returns, body: insts.into_boxed_slice() })
     }
 };
 
@@ -34,6 +36,73 @@ pub MacroArgs: Box<[&'input str]> = {
         list.into_boxed_slice()
     }
 };
+
+pub Instruction: ast::Instruction<'input> = {
+    <word:Word> => ast::Instruction::PushAuto(word),
+    "push1"  <word:Word> => ast::Instruction::Push(OpCode::PUSH1,  word),
+    "push2"  <word:Word> => ast::Instruction::Push(OpCode::PUSH2,  word),
+    "push3"  <word:Word> => ast::Instruction::Push(OpCode::PUSH3,  word),
+    "push4"  <word:Word> => ast::Instruction::Push(OpCode::PUSH4,  word),
+    "push5"  <word:Word> => ast::Instruction::Push(OpCode::PUSH5,  word),
+    "push6"  <word:Word> => ast::Instruction::Push(OpCode::PUSH6,  word),
+    "push7"  <word:Word> => ast::Instruction::Push(OpCode::PUSH7,  word),
+    "push8"  <word:Word> => ast::Instruction::Push(OpCode::PUSH8,  word),
+    "push9"  <word:Word> => ast::Instruction::Push(OpCode::PUSH9,  word),
+    "push10" <word:Word> => ast::Instruction::Push(OpCode::PUSH10, word),
+    "push11" <word:Word> => ast::Instruction::Push(OpCode::PUSH11, word),
+    "push12" <word:Word> => ast::Instruction::Push(OpCode::PUSH12, word),
+    "push13" <word:Word> => ast::Instruction::Push(OpCode::PUSH13, word),
+    "push14" <word:Word> => ast::Instruction::Push(OpCode::PUSH14, word),
+    "push15" <word:Word> => ast::Instruction::Push(OpCode::PUSH15, word),
+    "push16" <word:Word> => ast::Instruction::Push(OpCode::PUSH16, word),
+    "push17" <word:Word> => ast::Instruction::Push(OpCode::PUSH17, word),
+    "push18" <word:Word> => ast::Instruction::Push(OpCode::PUSH18, word),
+    "push19" <word:Word> => ast::Instruction::Push(OpCode::PUSH19, word),
+    "push20" <word:Word> => ast::Instruction::Push(OpCode::PUSH20, word),
+    "push21" <word:Word> => ast::Instruction::Push(OpCode::PUSH21, word),
+    "push22" <word:Word> => ast::Instruction::Push(OpCode::PUSH22, word),
+    "push23" <word:Word> => ast::Instruction::Push(OpCode::PUSH23, word),
+    "push24" <word:Word> => ast::Instruction::Push(OpCode::PUSH24, word),
+    "push25" <word:Word> => ast::Instruction::Push(OpCode::PUSH25, word),
+    "push26" <word:Word> => ast::Instruction::Push(OpCode::PUSH26, word),
+    "push27" <word:Word> => ast::Instruction::Push(OpCode::PUSH27, word),
+    "push28" <word:Word> => ast::Instruction::Push(OpCode::PUSH28, word),
+    "push29" <word:Word> => ast::Instruction::Push(OpCode::PUSH29, word),
+    "push30" <word:Word> => ast::Instruction::Push(OpCode::PUSH30, word),
+    "push31" <word:Word> => ast::Instruction::Push(OpCode::PUSH31, word),
+    "push32" <word:Word> => ast::Instruction::Push(OpCode::PUSH32, word),
+    <id:IDENT> => {
+        if let Some(op) = parse_opcode(id) {
+            ast::Instruction::Op(op)
+        } else {
+            ast::Instruction::LabelReference(id)
+        }
+    },
+    <label:IDENT> ":" => ast::Instruction::LabelDefinition(label),
+    "<" <referenc:IDENT> ">" => ast::Instruction::MacroArgReference(referenc),
+    "[" <referenc:IDENT> "]" => ast::Instruction::ConstantReference(referenc),
+    <invoke:Invoke> => ast::Instruction::Invoke(invoke),
+}
+
+pub Invoke: ast::Invoke<'input> = {
+    <name:IDENT> "(" <args:InvokeMacroArgs> ")" => ast::Invoke::Macro{ name, args },
+    "__tablestart" "(" <arg:IDENT> ")" => ast::Invoke::BuiltinTableStart(arg),
+    "__tablesize" "(" <arg:IDENT> ")" => ast::Invoke::BuiltinTableSize(arg),
+    "__codesize" "(" <arg:IDENT> ")" => ast::Invoke::BuiltinCodeSize(arg),
+    "__codeoffset" "(" <arg:IDENT> ")" => ast::Invoke::BuiltinCodeOffset(arg),
+    "__FUNC_SIG" "(" <arg:IDENT> ")" => ast::Invoke::BuiltinFuncSig(arg),
+    "__EVENT_HASH" "(" <arg:IDENT> ")" => ast::Invoke::BuiltinEventHash(arg),
+    "__ERROR" "(" <arg:IDENT> ")" => ast::Invoke::BuiltinError(arg),
+};
+
+pub InvokeMacroArgs: Box<[U256]> = {
+    "(" ")" => Box::new([]),
+    "(" <first:Word> <rest:("," Word)*> ")" => {
+        let mut list = vec![first];
+        list.extend(rest.into_iter().map(|(_, t)| t));
+        list.into_boxed_slice()
+    }
+}
 
 pub Constant: ast::HuffDefinition<'input> = {
     "constant" <name:IDENT> "=" <value:Word> => ast::HuffDefinition::Constant { name, value }

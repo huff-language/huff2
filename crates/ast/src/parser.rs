@@ -1,9 +1,18 @@
 use crate as ast;
 use crate::grammar;
 use lalrpop_util::{lexer::Token, ParseError};
+use revm_interpreter::opcode::OpCode;
 
 pub fn parse(src: &str) -> Result<ast::Root, ParseError<usize, Token<'_>, &str>> {
     grammar::RootParser::new().parse(src)
+}
+
+// Parses lowercase opcodes.
+pub(crate) fn parse_opcode(op: &str) -> Option<OpCode> {
+    if op.chars().all(|c| c.is_lowercase()) {
+        return OpCode::parse(op.to_uppercase().as_str());
+    }
+    None
 }
 
 #[cfg(test)]
@@ -11,6 +20,7 @@ mod tests {
     use super::*;
     use alloy_dyn_abi::DynSolType;
     use alloy_primitives::{uint, U256};
+    use revm_interpreter::opcode::OpCode;
 
     #[test]
     fn word_parser() {
@@ -48,24 +58,63 @@ mod tests {
     #[test]
     fn macro_parser() {
         assert_eq!(
-            grammar::MacroParser::new().parse("macro MAIN() = takes (0) returns (0) { }"),
+            grammar::MacroParser::new().parse("macro MAIN() = takes (0) returns (0) { stop }"),
             Ok(ast::HuffDefinition::Macro(ast::Macro {
                 name: "MAIN",
                 args: Box::new([]),
                 takes: 0,
                 returns: 0,
-                body: Box::new([])
+                body: Box::new([ast::Instruction::Op(OpCode::STOP)])
             }))
         );
         assert_eq!(
-            grammar::MacroParser::new().parse("macro READ_ADDRESS(offset) = takes (0) returns (1) { }"),
+            grammar::MacroParser::new()
+                .parse("macro READ_ADDRESS(offset) = takes (0) returns (1) { stop }"),
             Ok(ast::HuffDefinition::Macro(ast::Macro {
                 name: "READ_ADDRESS",
                 args: Box::new(["offset"]),
                 takes: 0,
                 returns: 1,
-                body: Box::new([])
+                body: Box::new([ast::Instruction::Op(OpCode::STOP)])
             }))
+        );
+    }
+
+    #[test]
+    fn instruction_parser() {
+        assert_eq!(
+            grammar::InstructionParser::new().parse("add"),
+            Ok(ast::Instruction::Op(OpCode::ADD))
+        );
+        assert_eq!(
+            grammar::InstructionParser::new().parse("0x1"),
+            Ok(ast::Instruction::PushAuto(uint!(1_U256)))
+        );
+        assert_eq!(
+            grammar::InstructionParser::new().parse("push32 0x1"),
+            Ok(ast::Instruction::Push(OpCode::PUSH32, uint!(1_U256)))
+        );
+        assert_eq!(
+            grammar::InstructionParser::new().parse("x"),
+            Ok(ast::Instruction::LabelReference("x"))
+        );
+        assert_eq!(
+            grammar::InstructionParser::new().parse("x:"),
+            Ok(ast::Instruction::LabelDefinition("x"))
+        );
+        assert_eq!(
+            grammar::InstructionParser::new().parse("<x>"),
+            Ok(ast::Instruction::MacroArgReference("x"))
+        );
+        assert_eq!(
+            grammar::InstructionParser::new().parse("[x]"),
+            Ok(ast::Instruction::ConstantReference("x"))
+        );
+        assert_eq!(
+            grammar::InstructionParser::new().parse("__tablestart(TABLE)"),
+            Ok(ast::Instruction::Invoke(ast::Invoke::BuiltinTableStart(
+                "TABLE"
+            )))
         );
     }
 

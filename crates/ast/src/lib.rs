@@ -6,36 +6,32 @@ lalrpop_util::lalrpop_mod!(grammar);
 
 use alloy_dyn_abi::DynSolType;
 use alloy_primitives::U256;
-use evm_glue::opcodes::Opcode;
+use revm_interpreter::opcode::OpCode;
 
 pub struct Root<'src>(pub Box<[HuffDefinition<'src>]>);
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum BuiltinInvoke<'src> {
-    TableStart(&'src str),
-    TableSize(&'src str),
-    CodeSize(&'src str),
-    CodeOffset(&'src str),
-    FuncSig(&'src str),
-    EventSig(&'src str),
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum MacroExpr<'src> {
-    Op(Opcode),
-    MacroArgReference(&'src str),
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum MacroStatement<'src> {
+pub enum Instruction<'src> {
+    Op(OpCode),
+    Push(OpCode, U256),
+    PushAuto(U256),
     LabelDefinition(&'src str),
     LabelReference(&'src str),
-    MacroInvoke {
-        name: &'src str,
-        args: Box<[MacroExpr<'src>]>,
-    },
-    BuiltinInvoke(BuiltinInvoke<'src>),
-    Expr(MacroExpr<'src>),
+    MacroArgReference(&'src str),
+    ConstantReference(&'src str),
+    Invoke(Invoke<'src>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Invoke<'src> {
+    Macro { name: &'src str, args: Box<[U256]> },
+    BuiltinTableStart(&'src str),
+    BuiltinTableSize(&'src str),
+    BuiltinCodeSize(&'src str),
+    BuiltinCodeOffset(&'src str),
+    BuiltinFuncSig(&'src str),
+    BuiltinEventHash(&'src str),
+    BuiltinError(&'src str),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -51,7 +47,7 @@ pub struct Macro<'src> {
     pub args: Box<[&'src str]>,
     pub takes: usize,
     pub returns: usize,
-    pub body: Box<[MacroStatement<'src>]>,
+    pub body: Box<[Instruction<'src>]>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
