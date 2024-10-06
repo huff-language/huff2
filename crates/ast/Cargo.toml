@@ -13,3 +13,4 @@ alloy-primitives.workspace = true
 revm-interpreter.workspace = true
 evm-glue.workspace = true
 lalrpop-util.workspace = true
+thiserror.workspace = true

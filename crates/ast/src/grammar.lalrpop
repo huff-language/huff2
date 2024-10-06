@@ -7,6 +7,10 @@ use crate::parser::parse_opcode;
 
 grammar;
 
+extern {
+    type Error = ast::Error;
+}
+
 pub Root: ast::Root<'input> = {
     <def:Definition*> => ast::Root(def.into_iter().collect()),
 };
@@ -140,10 +144,10 @@ pub SolTypeList: Box<[DynSolType]> = {
 };
 
 pub SolType: DynSolType = {
-    <t:SolRawType> =>? DynSolType::parse(t).map_err(|_| ParseError::User { error: "XXX" })
+    <t:SolRawType> =>? DynSolType::parse(&t).map_err(|e| ParseError::User { error: ast::Error::InvalidSolType(e) })
 };
 
-pub SolRawType: &'input str = {
+pub SolRawType: String = {
     <t:SolRawPrimitiveType> <ex:("[" DEC? "]")?> IDENT? => {
         let mut result = t.to_string();
         if let Some(ex) = ex {
@@ -153,7 +157,7 @@ pub SolRawType: &'input str = {
             }
             result.push_str(ex.2);
         }
-        Box::leak(result.into_boxed_str())
+        result
     },
     <t:SolRawTupleType> <ex:("[" DEC? "]")?> IDENT? => {
         let mut result = t.to_string();
@@ -164,7 +168,7 @@ pub SolRawType: &'input str = {
             }
             result.push_str(ex.2);
         }
-        Box::leak(result.into_boxed_str())
+        result
     },
 };
 
@@ -172,41 +176,35 @@ pub SolRawPrimitiveType: &'input str = {
     <t:IDENT> => t
 };
 
-pub SolRawTupleType: &'input str = {
+pub SolRawTupleType: String = {
     "(" <fist:SolRawType> <rest:("," SolRawType)*> ")" => {
         let mut result = "(".to_string();
-        result.push_str(fist);
+        result.push_str(&fist);
         rest.into_iter().for_each(|(_, t)| {
             result.push_str(",");
-            result.push_str(t);
+            result.push_str(&t);
         });
         result.push_str(")");
-        Box::leak(result.into_boxed_str())
+        result
     }
 }
 
 pub Word: U256 = {
     <s:HEX> =>? U256::from_str_radix(&s[2..], 16).map_err(|e| {
-        let error_str: &'static str = Box::leak(e.to_string().into_boxed_str());
-        ParseError::User { error: error_str }
+        ParseError::User { error: ast::Error::WordOverflow(e) }
     }),
     <s:BIN> =>? U256::from_str_radix(&s[2..], 2).map_err(|e| {
-        let error_str: &'static str = Box::leak(e.to_string().into_boxed_str());
-        ParseError::User { error: error_str }
+        ParseError::User { error: ast::Error::WordOverflow(e) }
     }),
     <s:DEC> =>? U256::from_str_radix(s, 10).map_err(|e| {
-        let error_str: &'static str = Box::leak(e.to_string().into_boxed_str());
-        ParseError::User { error: error_str }
+        ParseError::User { error: ast::Error::WordOverflow(e) }
     }),
 };
 
 pub Code: Vec<u8> = {
     <s:HEX> =>? Bytes::from_hex(s)
         .map(|b| b.to_vec())
-        .map_err(|e| {
-            let error_str: &'static str = Box::leak(e.to_string().into_boxed_str());
-            ParseError::User { error: error_str }
-        })
+        .map_err(|e| ParseError::User{ error: ast::Error::BytesOddLength(e) })
 }
 
 match {

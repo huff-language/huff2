@@ -1,6 +1,8 @@
+mod error;
 mod parser;
 
 pub use parser::parse;
+pub use error::Error;
 
 lalrpop_util::lalrpop_mod!(grammar);
 

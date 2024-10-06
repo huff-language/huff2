@@ -3,7 +3,7 @@ use crate::grammar;
 use lalrpop_util::{lexer::Token, ParseError};
 use revm_interpreter::opcode::OpCode;
 
-pub fn parse(src: &str) -> Result<ast::Root, ParseError<usize, Token<'_>, &str>> {
+pub fn parse(src: &str) -> Result<ast::Root, ParseError<usize, Token<'_>, ast::Error>> {
     grammar::RootParser::new().parse(src)
 }
 
@@ -19,7 +19,7 @@ pub(crate) fn parse_opcode(op: &str) -> Option<OpCode> {
 mod tests {
     use super::*;
     use alloy_dyn_abi::DynSolType;
-    use alloy_primitives::{uint, U256};
+    use alloy_primitives::{hex, ruint, uint, U256};
     use revm_interpreter::opcode::OpCode;
 
     #[test]
@@ -36,7 +36,9 @@ mod tests {
             grammar::WordParser::new()
                 .parse("0x10000000000000000000000000000000000000000000000000000000000000000"),
             Err(ParseError::User {
-                error: "the value is too large to fit the target type"
+                error: ast::Error::WordOverflow(ruint::ParseError::BaseConvertError(
+                    ruint::BaseConvertError::Overflow
+                ))
             })
         );
     }
@@ -50,7 +52,7 @@ mod tests {
         assert_eq!(
             grammar::CodeParser::new().parse("0x0"),
             Err(ParseError::User {
-                error: "odd number of digits"
+                error: ast::Error::BytesOddLength(hex::FromHexError::OddLength)
             })
         );
     }
