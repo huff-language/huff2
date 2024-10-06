@@ -118,6 +118,13 @@ mod tests {
                 "TABLE"
             )))
         );
+        assert_eq!(
+            grammar::InstructionParser::new().parse("READ_ADDRESS(0x4)"),
+            Ok(ast::Instruction::Invoke(ast::Invoke::Macro{
+                name:"READ_ADDRESS",
+                args: Box::new([uint!(4_U256)])
+            }))
+        );
     }
 
     #[test]

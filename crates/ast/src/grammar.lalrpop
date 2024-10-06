@@ -89,7 +89,7 @@ pub Instruction: ast::Instruction<'input> = {
 }
 
 pub Invoke: ast::Invoke<'input> = {
-    <name:IDENT> "(" <args:InvokeMacroArgs> ")" => ast::Invoke::Macro{ name, args },
+    <name:IDENT> <args:InvokeMacroArgs> => ast::Invoke::Macro{ name, args },
     "__tablestart" "(" <arg:IDENT> ")" => ast::Invoke::BuiltinTableStart(arg),
     "__tablesize" "(" <arg:IDENT> ")" => ast::Invoke::BuiltinTableSize(arg),
     "__codesize" "(" <arg:IDENT> ")" => ast::Invoke::BuiltinCodeSize(arg),
