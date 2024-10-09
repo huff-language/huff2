@@ -1,32 +1,38 @@
 mod error;
 mod parser;
 
-pub use parser::parse;
 pub use error::Error;
+pub use parser::parse;
 
 lalrpop_util::lalrpop_mod!(grammar);
 
 use alloy_dyn_abi::DynSolType;
 use alloy_primitives::U256;
-use revm_interpreter::opcode::OpCode;
+use evm_glue::opcodes::Opcode;
 
 pub struct Root<'src>(pub Box<[HuffDefinition<'src>]>);
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Instruction<'src> {
-    Op(OpCode),
-    Push(OpCode, U256),
-    PushAuto(U256),
+pub enum MacroStatement<'src> {
     LabelDefinition(&'src str),
-    LabelReference(&'src str),
-    MacroArgReference(&'src str),
-    ConstantReference(&'src str),
+    Instruction(Instruction<'src>),
     Invoke(Invoke<'src>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub enum Instruction<'src> {
+    Op(Opcode),
+    LabelReference(&'src str),
+    MacroArgReference(&'src str),
+    ConstantReference(&'src str),
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum Invoke<'src> {
-    Macro { name: &'src str, args: Box<[U256]> },
+    Macro {
+        name: &'src str,
+        args: Box<[Instruction<'src>]>,
+    },
     BuiltinTableStart(&'src str),
     BuiltinTableSize(&'src str),
     BuiltinCodeSize(&'src str),

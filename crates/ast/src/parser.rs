@@ -1,18 +1,70 @@
 use crate as ast;
 use crate::grammar;
+use alloy_primitives::U256;
+use evm_glue::opcodes::Opcode;
 use lalrpop_util::{lexer::Token, ParseError};
-use revm_interpreter::opcode::OpCode;
 
 pub fn parse(src: &str) -> Result<ast::Root, ParseError<usize, Token<'_>, ast::Error>> {
     grammar::RootParser::new().parse(src)
 }
 
-// Parses lowercase opcodes.
-pub(crate) fn parse_opcode(op: &str) -> Option<OpCode> {
-    if op.chars().all(|c| c.is_lowercase()) {
-        return OpCode::parse(op.to_uppercase().as_str());
+pub(crate) fn u256_as_push_data<'a, const N: usize>(
+    value: U256,
+) -> Result<[u8; N], ParseError<usize, Token<'a>, ast::Error>> {
+    if value.byte_len() > N {
+        return Err(ParseError::User {
+            error: ast::Error::Todo(format!("word too large for PUSH{}", N)),
+        });
     }
-    None
+    let input = value.to_be_bytes::<32>();
+    let mut output = [0u8; N];
+    output.copy_from_slice(&input[32 - N..32]);
+
+    Ok(output)
+}
+
+pub(crate) fn convert_array<const N: usize>(input: [u8; 32]) -> [u8; N] {
+    let mut output = [0u8; N];
+    output.copy_from_slice(&input[32 - N..32]);
+    output
+}
+
+pub(crate) fn u256_as_push<'src>(value: U256) -> Opcode {
+    match value.byte_len() {
+        0..=1 => u256_as_push_data::<1>(value).map(Opcode::PUSH1).unwrap(),
+        2 => u256_as_push_data::<2>(value).map(Opcode::PUSH2).unwrap(),
+        3 => u256_as_push_data::<3>(value).map(Opcode::PUSH3).unwrap(),
+        4 => u256_as_push_data::<4>(value).map(Opcode::PUSH4).unwrap(),
+        5 => u256_as_push_data::<5>(value).map(Opcode::PUSH5).unwrap(),
+        6 => u256_as_push_data::<6>(value).map(Opcode::PUSH6).unwrap(),
+        7 => u256_as_push_data::<7>(value).map(Opcode::PUSH7).unwrap(),
+        8 => u256_as_push_data::<8>(value).map(Opcode::PUSH8).unwrap(),
+        9 => u256_as_push_data::<9>(value).map(Opcode::PUSH9).unwrap(),
+        10 => u256_as_push_data::<10>(value).map(Opcode::PUSH10).unwrap(),
+        11 => u256_as_push_data::<11>(value).map(Opcode::PUSH11).unwrap(),
+        12 => u256_as_push_data::<12>(value).map(Opcode::PUSH12).unwrap(),
+        13 => u256_as_push_data::<13>(value).map(Opcode::PUSH13).unwrap(),
+        14 => u256_as_push_data::<14>(value).map(Opcode::PUSH14).unwrap(),
+        15 => u256_as_push_data::<15>(value).map(Opcode::PUSH15).unwrap(),
+        16 => u256_as_push_data::<16>(value).map(Opcode::PUSH16).unwrap(),
+        17 => u256_as_push_data::<17>(value).map(Opcode::PUSH17).unwrap(),
+        18 => u256_as_push_data::<18>(value).map(Opcode::PUSH18).unwrap(),
+        19 => u256_as_push_data::<19>(value).map(Opcode::PUSH19).unwrap(),
+        20 => u256_as_push_data::<20>(value).map(Opcode::PUSH20).unwrap(),
+        21 => u256_as_push_data::<21>(value).map(Opcode::PUSH21).unwrap(),
+        22 => u256_as_push_data::<22>(value).map(Opcode::PUSH22).unwrap(),
+        23 => u256_as_push_data::<23>(value).map(Opcode::PUSH23).unwrap(),
+        24 => u256_as_push_data::<24>(value).map(Opcode::PUSH24).unwrap(),
+        25 => u256_as_push_data::<25>(value).map(Opcode::PUSH25).unwrap(),
+        26 => u256_as_push_data::<26>(value).map(Opcode::PUSH26).unwrap(),
+        27 => u256_as_push_data::<27>(value).map(Opcode::PUSH27).unwrap(),
+        28 => u256_as_push_data::<28>(value).map(Opcode::PUSH28).unwrap(),
+        29 => u256_as_push_data::<29>(value).map(Opcode::PUSH29).unwrap(),
+        30 => u256_as_push_data::<30>(value).map(Opcode::PUSH30).unwrap(),
+        31 => u256_as_push_data::<31>(value).map(Opcode::PUSH31).unwrap(),
+        32 => u256_as_push_data::<32>(value).map(Opcode::PUSH32).unwrap(),
+        _ => unreachable!(),
+    }
 }
 
 #[cfg(test)]
@@ -20,7 +72,6 @@ mod tests {
     use super::*;
     use alloy_dyn_abi::DynSolType;
     use alloy_primitives::{hex, ruint, uint, U256};
-    use revm_interpreter::opcode::OpCode;
 
     #[test]
     fn word_parser() {
@@ -66,7 +117,7 @@ mod tests {
                 args: Box::new([]),
                 takes: 0,
                 returns: 0,
-                body: Box::new([ast::Instruction::Op(OpCode::STOP)])
+                body: Box::new([ast::Instruction::Op(Opcode::STOP)])
             }))
         );
         assert_eq!(
@@ -77,7 +128,28 @@ mod tests {
                 args: Box::new(["offset"]),
                 takes: 0,
                 returns: 1,
-                body: Box::new([ast::Instruction::Op(OpCode::STOP)])
+                body: Box::new([ast::Instruction::Op(Opcode::STOP)])
+            }))
+        );
+    }
+
+    #[test]
+    fn macro_statement_parser() {
+        assert_eq!(
+            grammar::MacroStatementParser::new().parse("x:"),
+            Ok(ast::MacroStatement::LabelDefinition("x"))
+        );
+        assert_eq!(
+            grammar::MacroStatementParser::new().parse("__tablestart(TABLE)"),
+            Ok(ast::MacroStatement::Invoke(ast::Invoke::BuiltinTableStart(
+                "TABLE"
+            )))
+        );
+        assert_eq!(
+            grammar::MacroStatementParser::new().parse("READ_ADDRESS(0x4)"),
+            Ok(ast::MacroStatement::Invoke(ast::Invoke::Macro {
+                name: "READ_ADDRESS",
+                args: Box::new([ast::Instruction::Op(Opcode::PUSH1([0x04]))])
             }))
         );
     }
@@ -86,23 +158,19 @@ mod tests {
     fn instruction_parser() {
         assert_eq!(
             grammar::InstructionParser::new().parse("add"),
-            Ok(ast::Instruction::Op(OpCode::ADD))
+            Ok(ast::Instruction::Op(Opcode::ADD))
         );
         assert_eq!(
             grammar::InstructionParser::new().parse("0x1"),
-            Ok(ast::Instruction::PushAuto(uint!(1_U256)))
+            Ok(ast::Instruction::Op(Opcode::PUSH1([0x01])))
         );
         assert_eq!(
-            grammar::InstructionParser::new().parse("push32 0x1"),
-            Ok(ast::Instruction::Push(OpCode::PUSH32, uint!(1_U256)))
+            grammar::InstructionParser::new().parse("push2 0x1"),
+            Ok(ast::Instruction::Op(Opcode::PUSH2([0x00, 0x01])))
         );
         assert_eq!(
             grammar::InstructionParser::new().parse("x"),
             Ok(ast::Instruction::LabelReference("x"))
-        );
-        assert_eq!(
-            grammar::InstructionParser::new().parse("x:"),
-            Ok(ast::Instruction::LabelDefinition("x"))
         );
         assert_eq!(
             grammar::InstructionParser::new().parse("<x>"),
@@ -111,19 +179,6 @@ mod tests {
         assert_eq!(
             grammar::InstructionParser::new().parse("[x]"),
             Ok(ast::Instruction::ConstantReference("x"))
-        );
-        assert_eq!(
-            grammar::InstructionParser::new().parse("__tablestart(TABLE)"),
-            Ok(ast::Instruction::Invoke(ast::Invoke::BuiltinTableStart(
-                "TABLE"
-            )))
-        );
-        assert_eq!(
-            grammar::InstructionParser::new().parse("READ_ADDRESS(0x4)"),
-            Ok(ast::Instruction::Invoke(ast::Invoke::Macro{
-                name:"READ_ADDRESS",
-                args: Box::new([uint!(4_U256)])
-            }))
         );
     }
 
