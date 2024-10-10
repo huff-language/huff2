@@ -23,12 +23,6 @@ pub(crate) fn u256_as_push_data<'a, const N: usize>(
     Ok(output)
 }
 
-pub(crate) fn convert_array<const N: usize>(input: [u8; 32]) -> [u8; N] {
-    let mut output = [0u8; N];
-    output.copy_from_slice(&input[32 - N..32]);
-    output
-}
-
 pub(crate) fn u256_as_push<'src>(value: U256) -> Opcode {
     match value.byte_len() {
         0..=1 => u256_as_push_data::<1>(value).map(Opcode::PUSH1).unwrap(),
@@ -111,13 +105,12 @@ mod tests {
     #[test]
     fn macro_parser() {
         assert_eq!(
-            grammar::MacroParser::new().parse("macro MAIN() = takes (0) returns (0) { stop }"),
+            grammar::MacroParser::new().parse("macro MAIN() = { }"),
             Ok(ast::HuffDefinition::Macro(ast::Macro {
                 name: "MAIN",
                 args: Box::new([]),
-                takes: 0,
-                returns: 0,
-                body: Box::new([ast::Instruction::Op(Opcode::STOP)])
+                takes_returns: None,
+                body: Box::new([])
             }))
         );
         assert_eq!(
@@ -126,8 +119,7 @@ mod tests {
             Ok(ast::HuffDefinition::Macro(ast::Macro {
                 name: "READ_ADDRESS",
                 args: Box::new(["offset"]),
-                takes: 0,
-                returns: 1,
+                takes_returns: Some((0, 1)),
                 body: Box::new([ast::Instruction::Op(Opcode::STOP)])
             }))
         );

@@ -26,10 +26,13 @@ pub Definition: ast::HuffDefinition<'input> = {
 };
 
 pub Macro: ast::HuffDefinition<'input> = {
-    "macro" <name:IDENT> <args:MacroArgs> "=" "takes" "(" <takes:DEC> ")" "returns" "(" <returns:DEC> ")" "{" <insts:Instruction*> "}" => {
-        let takes = takes.parse::<usize>().unwrap();
-        let returns = returns.parse::<usize>().unwrap();
-        ast::HuffDefinition::Macro(ast::Macro{ name, args, takes, returns, body: insts.into_boxed_slice() })
+    "macro" <name:IDENT> <args:MacroArgs> "=" <tr:("takes" "(" DEC ")" "returns" "(" DEC ")")?> "{" <insts:Instruction*> "}" => {
+        let takes_returns = if let Some((_, _, takes, _, _, _, returns, _)) = tr {
+            Some((takes.parse::<usize>().unwrap(), returns.parse::<usize>().unwrap()))
+        } else {
+            None
+        };
+        ast::HuffDefinition::Macro(ast::Macro{ name, args, takes_returns, body: insts.into_boxed_slice() })
     }
 };
 

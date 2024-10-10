@@ -53,8 +53,7 @@ pub struct Jumptable<'src> {
 pub struct Macro<'src> {
     pub name: &'src str,
     pub args: Box<[&'src str]>,
-    pub takes: usize,
-    pub returns: usize,
+    pub takes_returns: Option<(usize, usize)>,
     pub body: Box<[Instruction<'src>]>,
 }
 
