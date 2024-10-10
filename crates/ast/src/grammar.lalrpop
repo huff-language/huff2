@@ -26,7 +26,7 @@ pub Definition: ast::Definition<'input> = {
 };
 
 pub Macro: ast::Definition<'input> = {
-    "macro" <name:IDENT> <args:MacroArgs> "=" <tr:("takes" "(" DEC ")" "returns" "(" DEC ")")?> "{" <insts:Instruction*> "}" => {
+    "macro" <name:IDENT> <args:MacroArgs> "=" <tr:("takes" "(" DEC ")" "returns" "(" DEC ")")?> "{" <insts:MacroStatement*> "}" => {
         let takes_returns = if let Some((_, _, takes, _, _, _, returns, _)) = tr {
             Some((takes.parse::<usize>().unwrap(), returns.parse::<usize>().unwrap()))
         } else {

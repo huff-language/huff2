@@ -28,7 +28,7 @@ pub struct Macro<'src> {
     pub name: &'src str,
     pub args: Box<[&'src str]>,
     pub takes_returns: Option<(usize, usize)>,
-    pub body: Box<[Instruction<'src>]>,
+    pub body: Box<[MacroStatement<'src>]>,
 }
 
 #[derive(Debug, PartialEq, Eq)]

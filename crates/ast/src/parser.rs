@@ -120,7 +120,7 @@ mod tests {
                 name: "READ_ADDRESS",
                 args: Box::new(["offset"]),
                 takes_returns: Some((0, 1)),
-                body: Box::new([ast::Instruction::Op(Opcode::STOP)])
+                body: Box::new([ast::MacroStatement::Instruction(ast::Instruction::Op(Opcode::STOP))])
             }))
         );
     }
