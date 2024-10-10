@@ -1,0 +1,15 @@
+[package]
+name = "huff-ast"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[build-dependencies]
+lalrpop = "0.22"
+
+[dependencies]
+alloy-dyn-abi.workspace = true
+alloy-primitives.workspace = true
+evm-glue.workspace = true
+lalrpop-util.workspace = true
+thiserror.workspace = true
