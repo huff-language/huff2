@@ -1,6 +1,8 @@
 mod error;
+mod lexer;
 mod parser;
 
+use chumsky::span::SimpleSpan;
 pub use error::Error;
 pub use parser::parse;
 
@@ -86,3 +88,6 @@ pub struct SolError<'src> {
     pub name: &'src str,
     pub args: Box<[DynSolType]>,
 }
+
+/// A spanned value.
+pub type Spanned<T> = (T, SimpleSpan<usize>);

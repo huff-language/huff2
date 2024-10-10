@@ -12,4 +12,5 @@ alloy-dyn-abi.workspace = true
 alloy-primitives.workspace = true
 evm-glue.workspace = true
 lalrpop-util.workspace = true
+chumsky.workspace = true
 thiserror.workspace = true
