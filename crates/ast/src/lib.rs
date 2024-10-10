@@ -10,7 +10,18 @@ use alloy_dyn_abi::DynSolType;
 use alloy_primitives::U256;
 use evm_glue::opcodes::Opcode;
 
-pub struct Root<'src>(pub Box<[HuffDefinition<'src>]>);
+pub struct Root<'src>(pub Box<[Definition<'src>]>);
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Definition<'src> {
+    Macro(Macro<'src>),
+    Constant { name: &'src str, value: U256 },
+    Jumptable(Jumptable<'src>),
+    Codetable { name: &'src str, data: Box<[u8]> },
+    AbiFunction(AbiFunction<'src>),
+    AbiEvent(AbiEvent<'src>),
+    AbiError(AbiError<'src>),
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum MacroStatement<'src> {
@@ -74,15 +85,4 @@ pub struct AbiEvent<'src> {
 pub struct AbiError<'src> {
     pub name: &'src str,
     pub args: Box<[DynSolType]>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum HuffDefinition<'src> {
-    Macro(Macro<'src>),
-    Constant { name: &'src str, value: U256 },
-    Jumptable(Jumptable<'src>),
-    Codetable { name: &'src str, data: Box<[u8]> },
-    AbiFunction(AbiFunction<'src>),
-    AbiEvent(AbiEvent<'src>),
-    AbiError(AbiError<'src>),
 }

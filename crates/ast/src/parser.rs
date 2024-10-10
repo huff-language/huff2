@@ -106,7 +106,7 @@ mod tests {
     fn macro_parser() {
         assert_eq!(
             grammar::MacroParser::new().parse("macro MAIN() = { }"),
-            Ok(ast::HuffDefinition::Macro(ast::Macro {
+            Ok(ast::Definition::Macro(ast::Macro {
                 name: "MAIN",
                 args: Box::new([]),
                 takes_returns: None,
@@ -116,7 +116,7 @@ mod tests {
         assert_eq!(
             grammar::MacroParser::new()
                 .parse("macro READ_ADDRESS(offset) = takes (0) returns (1) { stop }"),
-            Ok(ast::HuffDefinition::Macro(ast::Macro {
+            Ok(ast::Definition::Macro(ast::Macro {
                 name: "READ_ADDRESS",
                 args: Box::new(["offset"]),
                 takes_returns: Some((0, 1)),
@@ -178,7 +178,7 @@ mod tests {
     fn constant_parser() {
         assert_eq!(
             grammar::ConstantParser::new().parse("constant TEST = 0x1"),
-            Ok(ast::HuffDefinition::Constant {
+            Ok(ast::Definition::Constant {
                 name: "TEST",
                 value: uint!(1_U256),
             })
@@ -186,7 +186,7 @@ mod tests {
         assert_eq!(
             grammar::ConstantParser::new()
                 .parse(" constant TEST /* comment */ = 0b1101 // comment"),
-            Ok(ast::HuffDefinition::Constant {
+            Ok(ast::Definition::Constant {
                 name: "TEST",
                 value: uint!(13_U256),
             })
@@ -197,14 +197,14 @@ mod tests {
     fn table_parser() {
         assert_eq!(
             grammar::TableParser::new().parse("table TEST { 0xc0de }"),
-            Ok(ast::HuffDefinition::Codetable {
+            Ok(ast::Definition::Codetable {
                 name: "TEST",
                 data: Box::new([0xc0, 0xde])
             })
         );
         assert_eq!(
             grammar::TableParser::new().parse("table TEST { 0xc0de 0xcc00ddee }"),
-            Ok(ast::HuffDefinition::Codetable {
+            Ok(ast::Definition::Codetable {
                 name: "TEST",
                 data: Box::new([0xc0, 0xde, 0xcc, 0x00, 0xdd, 0xee])
             })
@@ -243,7 +243,7 @@ mod tests {
         assert_eq!(
             grammar::SolFunctionParser::new()
                 .parse("function balanceOf(address) returns (uint256)"),
-            Ok(ast::HuffDefinition::AbiFunction(ast::AbiFunction {
+            Ok(ast::Definition::AbiFunction(ast::AbiFunction {
                 name: "balanceOf",
                 args: Box::new([DynSolType::parse("address").unwrap()]),
                 rets: Box::new([DynSolType::parse("uint256").unwrap()]),
@@ -256,7 +256,7 @@ mod tests {
         assert_eq!(
             grammar::SolEventParser::new()
                 .parse("event Transfer(address from, address to, uint256 value)"),
-            Ok(ast::HuffDefinition::AbiEvent(ast::AbiEvent {
+            Ok(ast::Definition::AbiEvent(ast::AbiEvent {
                 name: "Transfer",
                 args: Box::new([
                     DynSolType::parse("address").unwrap(),
@@ -271,7 +271,7 @@ mod tests {
     fn sol_error_parser() {
         assert_eq!(
             grammar::SolErrorParser::new().parse("error PanicError(uint256)"),
-            Ok(ast::HuffDefinition::AbiError(ast::AbiError {
+            Ok(ast::Definition::AbiError(ast::AbiError {
                 name: "PanicError",
                 args: Box::new([DynSolType::parse("uint256").unwrap(),]),
             }))

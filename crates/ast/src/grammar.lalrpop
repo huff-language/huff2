@@ -16,7 +16,7 @@ pub Root: ast::Root<'input> = {
     <def:Definition*> => ast::Root(def.into_iter().collect()),
 };
 
-pub Definition: ast::HuffDefinition<'input> = {
+pub Definition: ast::Definition<'input> = {
     "#define" <m:Macro> => m,
     "#define" <c:Constant> => c,
     "#define" <t:Table> => t,
@@ -25,14 +25,14 @@ pub Definition: ast::HuffDefinition<'input> = {
     "#define" <e:SolError> => e,
 };
 
-pub Macro: ast::HuffDefinition<'input> = {
+pub Macro: ast::Definition<'input> = {
     "macro" <name:IDENT> <args:MacroArgs> "=" <tr:("takes" "(" DEC ")" "returns" "(" DEC ")")?> "{" <insts:Instruction*> "}" => {
         let takes_returns = if let Some((_, _, takes, _, _, _, returns, _)) = tr {
             Some((takes.parse::<usize>().unwrap(), returns.parse::<usize>().unwrap()))
         } else {
             None
         };
-        ast::HuffDefinition::Macro(ast::Macro{ name, args, takes_returns, body: insts.into_boxed_slice() })
+        ast::Definition::Macro(ast::Macro{ name, args, takes_returns, body: insts.into_boxed_slice() })
     }
 };
 
@@ -116,30 +116,30 @@ pub InvokeMacroArgs: Box<[ast::Instruction<'input>]> = {
     }
 }
 
-pub Constant: ast::HuffDefinition<'input> = {
-    "constant" <name:IDENT> "=" <value:Word> => ast::HuffDefinition::Constant { name, value }
+pub Constant: ast::Definition<'input> = {
+    "constant" <name:IDENT> "=" <value:Word> => ast::Definition::Constant { name, value }
 };
 
-pub Table: ast::HuffDefinition<'input> = {
+pub Table: ast::Definition<'input> = {
     "table" <name:IDENT> "{" <code:Code+> "}" => {
         let data = code.into_iter().flatten().collect::<Vec<u8>>().into_boxed_slice();
-        ast::HuffDefinition::Codetable { name, data }
+        ast::Definition::Codetable { name, data }
     },
 };
 
-pub SolFunction: ast::HuffDefinition<'input> = {
+pub SolFunction: ast::Definition<'input> = {
     "function" <name:IDENT> <args:SolTypeList> <rets:("returns" SolTypeList)?> => {
         let rets = rets.map(|(_, t)| t).unwrap_or_else(|| Box::new([]));
-        ast::HuffDefinition::AbiFunction(ast::AbiFunction{ name, args, rets })
+        ast::Definition::AbiFunction(ast::AbiFunction{ name, args, rets })
     }
 };
 
-pub SolEvent: ast::HuffDefinition<'input> = {
-    "event" <name:IDENT> <args:SolTypeList> => ast::HuffDefinition::AbiEvent(ast::AbiEvent{ name, args })
+pub SolEvent: ast::Definition<'input> = {
+    "event" <name:IDENT> <args:SolTypeList> => ast::Definition::AbiEvent(ast::AbiEvent{ name, args })
 };
 
-pub SolError: ast::HuffDefinition<'input> = {
-    "error" <name:IDENT> <args:SolTypeList> => ast::HuffDefinition::AbiError(ast::AbiError{ name, args })
+pub SolError: ast::Definition<'input> = {
+    "error" <name:IDENT> <args:SolTypeList> => ast::Definition::AbiError(ast::AbiError{ name, args })
 };
 
 pub SolTypeList: Box<[DynSolType]> = {
