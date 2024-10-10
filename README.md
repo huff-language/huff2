@@ -2,7 +2,7 @@
 
 Huff2 is the successor of the [huff-rs](https://github.com/huff-language/huff-rs) compiler. At a
 high-level its goals are:
-- to a maintanable and clean implementation of the language
+- to be a maintanable and clean implementation of the language
 - generalize and simplify language features
 - make it more feasible / scalable to write extremely low-level, optimized code
 - EOF?
