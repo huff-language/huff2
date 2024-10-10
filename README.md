@@ -27,6 +27,7 @@ high-level its goals are:
        - [ ] Runtime/Initcode flags (`-r` vs. `-b`)
        - [ ] Default constructor generation when `-b` and no explicit constructor set
        - [ ] Ability to output sizes for contracts
+       - [ ] ABI Builtins
 2. Add small QoL features:
     - [ ] Pushed tables (jump tables that are inlined as `PUSH<X>` instructions)
     - [ ] Make redundant syntax like `#define` optional
