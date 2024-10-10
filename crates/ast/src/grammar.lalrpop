@@ -130,16 +130,16 @@ pub Table: ast::Definition<'input> = {
 pub SolFunction: ast::Definition<'input> = {
     "function" <name:IDENT> <args:SolTypeList> <rets:("returns" SolTypeList)?> => {
         let rets = rets.map(|(_, t)| t).unwrap_or_else(|| Box::new([]));
-        ast::Definition::AbiFunction(ast::AbiFunction{ name, args, rets })
+        ast::Definition::SolFunction(ast::SolFunction{ name, args, rets })
     }
 };
 
 pub SolEvent: ast::Definition<'input> = {
-    "event" <name:IDENT> <args:SolTypeList> => ast::Definition::AbiEvent(ast::AbiEvent{ name, args })
+    "event" <name:IDENT> <args:SolTypeList> => ast::Definition::SolEvent(ast::SolEvent{ name, args })
 };
 
 pub SolError: ast::Definition<'input> = {
-    "error" <name:IDENT> <args:SolTypeList> => ast::Definition::AbiError(ast::AbiError{ name, args })
+    "error" <name:IDENT> <args:SolTypeList> => ast::Definition::SolError(ast::SolError{ name, args })
 };
 
 pub SolTypeList: Box<[DynSolType]> = {

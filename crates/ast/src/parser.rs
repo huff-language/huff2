@@ -243,7 +243,7 @@ mod tests {
         assert_eq!(
             grammar::SolFunctionParser::new()
                 .parse("function balanceOf(address) returns (uint256)"),
-            Ok(ast::Definition::AbiFunction(ast::AbiFunction {
+            Ok(ast::Definition::SolFunction(ast::SolFunction {
                 name: "balanceOf",
                 args: Box::new([DynSolType::parse("address").unwrap()]),
                 rets: Box::new([DynSolType::parse("uint256").unwrap()]),
@@ -256,7 +256,7 @@ mod tests {
         assert_eq!(
             grammar::SolEventParser::new()
                 .parse("event Transfer(address from, address to, uint256 value)"),
-            Ok(ast::Definition::AbiEvent(ast::AbiEvent {
+            Ok(ast::Definition::SolEvent(ast::SolEvent {
                 name: "Transfer",
                 args: Box::new([
                     DynSolType::parse("address").unwrap(),
@@ -271,7 +271,7 @@ mod tests {
     fn sol_error_parser() {
         assert_eq!(
             grammar::SolErrorParser::new().parse("error PanicError(uint256)"),
-            Ok(ast::Definition::AbiError(ast::AbiError {
+            Ok(ast::Definition::SolError(ast::SolError {
                 name: "PanicError",
                 args: Box::new([DynSolType::parse("uint256").unwrap(),]),
             }))

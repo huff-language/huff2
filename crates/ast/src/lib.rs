@@ -18,9 +18,17 @@ pub enum Definition<'src> {
     Constant { name: &'src str, value: U256 },
     Jumptable(Jumptable<'src>),
     Codetable { name: &'src str, data: Box<[u8]> },
-    AbiFunction(AbiFunction<'src>),
-    AbiEvent(AbiEvent<'src>),
-    AbiError(AbiError<'src>),
+    SolFunction(SolFunction<'src>),
+    SolEvent(SolEvent<'src>),
+    SolError(SolError<'src>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Macro<'src> {
+    pub name: &'src str,
+    pub args: Box<[&'src str]>,
+    pub takes_returns: Option<(usize, usize)>,
+    pub body: Box<[Instruction<'src>]>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -61,28 +69,20 @@ pub struct Jumptable<'src> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Macro<'src> {
-    pub name: &'src str,
-    pub args: Box<[&'src str]>,
-    pub takes_returns: Option<(usize, usize)>,
-    pub body: Box<[Instruction<'src>]>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct AbiFunction<'src> {
+pub struct SolFunction<'src> {
     pub name: &'src str,
     pub args: Box<[DynSolType]>,
     pub rets: Box<[DynSolType]>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct AbiEvent<'src> {
+pub struct SolEvent<'src> {
     pub name: &'src str,
     pub args: Box<[DynSolType]>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct AbiError<'src> {
+pub struct SolError<'src> {
     pub name: &'src str,
     pub args: Box<[DynSolType]>,
 }
