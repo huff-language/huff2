@@ -1,10 +1,6 @@
 use clap::Parser as ClapParser;
 use huff_ast::parse;
-use std::{
-    fs::File,
-    io::{self, Read},
-    process::exit,
-};
+use std::{fs::read_to_string, io, process::exit};
 use thiserror::Error;
 
 fn main() {
@@ -16,13 +12,10 @@ fn main() {
 }
 
 fn run(cli: Cli) -> HuffResult {
-    // read src file
-    let mut f = File::open(&cli.filename)?;
-    let mut src = String::new();
-    f.read_to_string(&mut src)?;
-
-    if let Err(e) = parse(&src) {
-        println!("error: {}", e);
+    let src = read_to_string(&cli.filename)?;
+    match parse(&src) {
+        Ok(ast) => println!("{:?}", ast),
+        Err(e) => println!("error: {}", e),
     }
 
     Ok(())
