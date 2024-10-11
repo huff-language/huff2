@@ -801,7 +801,6 @@ dependencies = [
  "chumsky",
  "evm-glue",
  "lalrpop",
- "lalrpop-util",
  "thiserror",
 ]
 
