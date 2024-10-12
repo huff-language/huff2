@@ -14,7 +14,6 @@ huff-ast = { path = "crates/ast" }
 
 alloy-dyn-abi = "0.8"
 alloy-primitives = "0.8"
-revm-interpreter = "10"
 ariadne = { version = "0.4.1", features = ["auto-color"] }
 clap = { version = "4", features = ["derive"] }
 evm-glue = { git = "https://github.com/Philogy/evm-glue.git", rev = "b51f6a0" }
