@@ -10,6 +10,7 @@ use alloy_dyn_abi::DynSolType;
 use alloy_primitives::U256;
 use evm_glue::opcodes::Opcode;
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Root<'src>(pub Box<[Definition<'src>]>);
 
 #[derive(Debug, PartialEq, Eq)]
