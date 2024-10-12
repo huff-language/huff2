@@ -4,7 +4,10 @@ mod parser;
 pub use error::Error;
 pub use parser::parse;
 
-lalrpop_util::lalrpop_mod!(grammar);
+lalrpop_util::lalrpop_mod!(
+    #[allow(clippy::all)]
+    grammar
+);
 
 use alloy_dyn_abi::DynSolType;
 use alloy_primitives::U256;

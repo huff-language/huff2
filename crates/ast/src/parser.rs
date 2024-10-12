@@ -23,7 +23,7 @@ pub(crate) fn u256_as_push_data<'a, const N: usize>(
     Ok(output)
 }
 
-pub(crate) fn u256_as_push<'src>(value: U256) -> Opcode {
+pub(crate) fn u256_as_push(value: U256) -> Opcode {
     match value.byte_len() {
         0..=1 => u256_as_push_data::<1>(value).map(Opcode::PUSH1).unwrap(),
         2 => u256_as_push_data::<2>(value).map(Opcode::PUSH2).unwrap(),
@@ -120,7 +120,9 @@ mod tests {
                 name: "READ_ADDRESS",
                 args: Box::new(["offset"]),
                 takes_returns: Some((0, 1)),
-                body: Box::new([ast::MacroStatement::Instruction(ast::Instruction::Op(Opcode::STOP))])
+                body: Box::new([ast::MacroStatement::Instruction(ast::Instruction::Op(
+                    Opcode::STOP
+                ))])
             }))
         );
     }
@@ -215,11 +217,10 @@ mod tests {
     fn sol_type_list_parser() {
         assert_eq!(
             grammar::SolTypeListParser::new().parse("(address, uint256)"),
-            Ok(vec![
-                DynSolType::parse("address").unwrap(),
-                DynSolType::parse("uint256").unwrap()
-            ]
-            .into_boxed_slice())
+            Ok(
+                vec![DynSolType::parse("address").unwrap(), DynSolType::parse("uint256").unwrap()]
+                    .into_boxed_slice()
+            )
         );
         assert_eq!(
             grammar::SolTypeListParser::new().parse("(address[] tokens)"),
