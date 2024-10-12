@@ -1,6 +1,7 @@
 mod error;
 mod lexer;
 mod parser;
+mod util;
 
 use alloy_dyn_abi::DynSolType;
 use alloy_primitives::U256;
@@ -13,15 +14,9 @@ pub struct Root<'src>(pub Box<[Definition<'src>]>);
 #[derive(Debug, PartialEq, Eq)]
 pub enum Definition<'src> {
     Macro(Macro<'src>),
-    Constant {
-        name: Spanned<&'src str>,
-        value: U256,
-    },
+    Constant { name: Spanned<&'src str>, value: U256 },
     Jumptable(Jumptable<'src>),
-    Codetable {
-        name: Spanned<&'src str>,
-        data: Box<[u8]>,
-    },
+    Table { name: Spanned<&'src str>, data: Box<[u8]> },
     SolFunction(SolFunction<'src>),
     SolEvent(SolEvent<'src>),
     SolError(SolError<'src>),
