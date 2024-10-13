@@ -107,7 +107,7 @@ mod tests {
         assert_eq!(
             grammar::MacroParser::new().parse("macro MAIN() = { }"),
             Ok(ast::Definition::Macro(ast::Macro {
-                name: "MAIN",
+                name: (6..10, "MAIN"),
                 args: Box::new([]),
                 takes_returns: None,
                 body: Box::new([])
@@ -117,12 +117,13 @@ mod tests {
             grammar::MacroParser::new()
                 .parse("macro READ_ADDRESS(offset) = takes (0) returns (1) { stop }"),
             Ok(ast::Definition::Macro(ast::Macro {
-                name: "READ_ADDRESS",
-                args: Box::new(["offset"]),
+                name: (6..18, "READ_ADDRESS"),
+                args: Box::new([(19..25, "offset")]),
                 takes_returns: Some((0, 1)),
-                body: Box::new([ast::MacroStatement::Instruction(ast::Instruction::Op(
-                    Opcode::STOP
-                ))])
+                body: Box::new([(
+                    53..57,
+                    ast::MacroStatement::Instruction(ast::Instruction::Op(Opcode::STOP))
+                )])
             }))
         );
     }
@@ -142,8 +143,8 @@ mod tests {
         assert_eq!(
             grammar::MacroStatementParser::new().parse("READ_ADDRESS(0x4)"),
             Ok(ast::MacroStatement::Invoke(ast::Invoke::Macro {
-                name: "READ_ADDRESS",
-                args: Box::new([ast::Instruction::Op(Opcode::PUSH1([0x04]))])
+                name: (0..12, "READ_ADDRESS"),
+                args: Box::new([(13..16, ast::Instruction::Op(Opcode::PUSH1([0x04])))])
             }))
         );
     }
@@ -181,7 +182,7 @@ mod tests {
         assert_eq!(
             grammar::ConstantParser::new().parse("constant TEST = 0x1"),
             Ok(ast::Definition::Constant {
-                name: "TEST",
+                name: (9..13, "TEST"),
                 value: uint!(1_U256),
             })
         );
@@ -189,7 +190,7 @@ mod tests {
             grammar::ConstantParser::new()
                 .parse(" constant TEST /* comment */ = 0b1101 // comment"),
             Ok(ast::Definition::Constant {
-                name: "TEST",
+                name: (10..14, "TEST"),
                 value: uint!(13_U256),
             })
         );
@@ -200,14 +201,14 @@ mod tests {
         assert_eq!(
             grammar::TableParser::new().parse("table TEST { 0xc0de }"),
             Ok(ast::Definition::Codetable {
-                name: "TEST",
+                name: (6..10, "TEST"),
                 data: Box::new([0xc0, 0xde])
             })
         );
         assert_eq!(
             grammar::TableParser::new().parse("table TEST { 0xc0de 0xcc00ddee }"),
             Ok(ast::Definition::Codetable {
-                name: "TEST",
+                name: (6..10, "TEST"),
                 data: Box::new([0xc0, 0xde, 0xcc, 0x00, 0xdd, 0xee])
             })
         );

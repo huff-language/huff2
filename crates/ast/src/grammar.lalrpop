@@ -26,19 +26,22 @@ pub Definition: ast::Definition<'input> = {
 };
 
 pub Macro: ast::Definition<'input> = {
-    "macro" <name:IDENT> <args:MacroArgs> "=" <tr:("takes" "(" DEC ")" "returns" "(" DEC ")")?> "{" <insts:MacroStatement*> "}" => {
+    "macro" <name:Spanned<IDENT>> <args:MacroArgs>
+        "=" <tr:("takes" "(" DEC ")" "returns" "(" DEC ")")?>
+        "{" <stmts:Spanned<MacroStatement>*> "}"
+    => {
         let takes_returns = if let Some((_, _, takes, _, _, _, returns, _)) = tr {
             Some((takes.parse::<usize>().unwrap(), returns.parse::<usize>().unwrap()))
         } else {
             None
         };
-        ast::Definition::Macro(ast::Macro{ name, args, takes_returns, body: insts.into_boxed_slice() })
+        ast::Definition::Macro(ast::Macro{ name, args, takes_returns, body: stmts.into_boxed_slice() })
     }
 };
 
-pub MacroArgs: Box<[&'input str]> = {
+pub MacroArgs: Box<[(ast::Span, &'input str)]> = {
     "(" ")" => Box::new([]),
-    "(" <first:IDENT> <rest:("," IDENT)*> ")" => {
+    "(" <first:Spanned<IDENT>> <rest:("," Spanned<IDENT>)*> ")" => {
         let mut list = vec![first];
         list.extend(rest.into_iter().map(|(_, t)| t));
         list.into_boxed_slice()
@@ -97,7 +100,7 @@ pub Instruction: ast::Instruction<'input> = {
 }
 
 pub Invoke: ast::Invoke<'input> = {
-    <name:IDENT> <args:InvokeMacroArgs> => ast::Invoke::Macro{ name, args },
+    <name:Spanned<IDENT>> <args:InvokeMacroArgs> => ast::Invoke::Macro{ name, args },
     "__tablestart" "(" <arg:IDENT> ")" => ast::Invoke::BuiltinTableStart(arg),
     "__tablesize" "(" <arg:IDENT> ")" => ast::Invoke::BuiltinTableSize(arg),
     "__codesize" "(" <arg:IDENT> ")" => ast::Invoke::BuiltinCodeSize(arg),
@@ -107,9 +110,9 @@ pub Invoke: ast::Invoke<'input> = {
     "__ERROR" "(" <arg:IDENT> ")" => ast::Invoke::BuiltinError(arg),
 };
 
-pub InvokeMacroArgs: Box<[ast::Instruction<'input>]> = {
+pub InvokeMacroArgs: Box<[(ast::Span, ast::Instruction<'input>)]> = {
     "(" ")" => Box::new([]),
-    "(" <first:Instruction> <rest:("," Instruction)*> ")" => {
+    "(" <first:Spanned<Instruction>> <rest:("," Spanned<Instruction>)*> ")" => {
         let mut list = vec![first];
         list.extend(rest.into_iter().map(|(_, t)| t));
         list.into_boxed_slice()
@@ -117,11 +120,11 @@ pub InvokeMacroArgs: Box<[ast::Instruction<'input>]> = {
 }
 
 pub Constant: ast::Definition<'input> = {
-    "constant" <name:IDENT> "=" <value:Word> => ast::Definition::Constant { name, value }
+    "constant" <name:Spanned<IDENT>> "=" <value:Word> => ast::Definition::Constant { name, value }
 };
 
 pub Table: ast::Definition<'input> = {
-    "table" <name:IDENT> "{" <code:Code+> "}" => {
+    "table" <name:Spanned<IDENT>> "{" <code:Code+> "}" => {
         let data = code.into_iter().flatten().collect::<Vec<u8>>().into_boxed_slice();
         ast::Definition::Codetable { name, data }
     },
@@ -213,6 +216,10 @@ pub Code: Vec<u8> = {
     <s:HEX> =>? Bytes::from_hex(s)
         .map(|b| b.to_vec())
         .map_err(|e| ParseError::User{ error: ast::Error::BytesOddLength(e) })
+}
+
+Spanned<T>: (ast::Span, T) = {
+    <start: @L> <inner: T> <end: @R> => (start..end, inner)
 }
 
 match {
