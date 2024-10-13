@@ -4,6 +4,8 @@ mod parser;
 pub use error::Error;
 pub use parser::parse;
 
+pub type Span = std::ops::Range<usize>;
+
 lalrpop_util::lalrpop_mod!(
     #[allow(clippy::all)]
     grammar
@@ -19,9 +21,15 @@ pub struct Root<'src>(pub Box<[Definition<'src>]>);
 #[derive(Debug, PartialEq, Eq)]
 pub enum Definition<'src> {
     Macro(Macro<'src>),
-    Constant { name: &'src str, value: U256 },
+    Constant {
+        name: (Span, &'src str),
+        value: U256,
+    },
     Jumptable(Jumptable<'src>),
-    Codetable { name: &'src str, data: Box<[u8]> },
+    Codetable {
+        name: (Span, &'src str),
+        data: Box<[u8]>,
+    },
     SolFunction(SolFunction<'src>),
     SolEvent(SolEvent<'src>),
     SolError(SolError<'src>),
@@ -29,10 +37,10 @@ pub enum Definition<'src> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Macro<'src> {
-    pub name: &'src str,
-    pub args: Box<[&'src str]>,
+    pub name: (Span, &'src str),
+    pub args: Box<[(Span, &'src str)]>,
     pub takes_returns: Option<(usize, usize)>,
-    pub body: Box<[MacroStatement<'src>]>,
+    pub body: Box<[(Span, MacroStatement<'src>)]>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -53,8 +61,8 @@ pub enum Instruction<'src> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Invoke<'src> {
     Macro {
-        name: &'src str,
-        args: Box<[Instruction<'src>]>,
+        name: (Span, &'src str),
+        args: Box<[(Span, Instruction<'src>)]>,
     },
     BuiltinTableStart(&'src str),
     BuiltinTableSize(&'src str),
@@ -67,7 +75,7 @@ pub enum Invoke<'src> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Jumptable<'src> {
-    pub name: &'src str,
+    pub name: (Span, &'src str),
     pub size: u8,
     pub labels: Box<[&'src str]>,
 }
