@@ -74,20 +74,20 @@ pub struct Jumptable<'src> {
 #[derive(Debug, PartialEq, Eq)]
 pub struct SolFunction<'src> {
     pub name: Spanned<&'src str>,
-    pub args: Box<[DynSolType]>,
-    pub rets: Box<[DynSolType]>,
+    pub args: Box<[Spanned<DynSolType>]>,
+    pub rets: Box<[Spanned<DynSolType>]>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct SolEvent<'src> {
     pub name: Spanned<&'src str>,
-    pub args: Box<[DynSolType]>,
+    pub args: Box<[Spanned<DynSolType>]>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct SolError<'src> {
     pub name: Spanned<&'src str>,
-    pub args: Box<[DynSolType]>,
+    pub args: Box<[Spanned<DynSolType>]>,
 }
 
 /// A spanned value.
