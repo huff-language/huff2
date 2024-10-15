@@ -457,56 +457,6 @@ fn sol_type<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Spanned<DynS
     })
 }
 
-/*
-
-pub SolType: DynSolType = {
-    <t:SolRawType> =>? DynSolType::parse(&t).map_err(|e| ParseError::User { error: ast::Error::InvalidSolType(e) })
-};
-
-pub SolRawType: String = {
-    <t:SolRawPrimitiveType> <ex:("[" DEC? "]")?> IDENT? => {
-        let mut result = t.to_string();
-        if let Some(ex) = ex {
-            result.push_str(ex.0);
-            if let Some(num) = ex.1 {
-                result.push_str(num);
-            }
-            result.push_str(ex.2);
-        }
-        result
-    },
-    <t:SolRawTupleType> <ex:("[" DEC? "]")?> IDENT? => {
-        let mut result = t.to_string();
-        if let Some(ex) = ex {
-            result.push_str(ex.0);
-            if let Some(num) = ex.1 {
-                result.push_str(num);
-            }
-            result.push_str(ex.2);
-        }
-        result
-    },
-};
-
-pub SolRawPrimitiveType: &'input str = {
-    <t:IDENT> => t
-};
-
-pub SolRawTupleType: String = {
-    "(" <fist:SolRawType> <rest:("," SolRawType)*> ")" => {
-        let mut result = "(".to_string();
-        result.push_str(&fist);
-        rest.into_iter().for_each(|(_, t)| {
-            result.push_str(",");
-            result.push_str(&t);
-        });
-        result.push_str(")");
-        result
-    }
-}
-
-*/
-
 fn ident<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Spanned<&'src str>> {
     select! {Ident(s) => s}.map_with(|s, ex| (s, ex.span()))
 }
