@@ -90,5 +90,8 @@ pub struct SolError<'src> {
     pub args: Box<[Spanned<DynSolType>]>,
 }
 
+/// A span.
+pub type Span = SimpleSpan<usize>;
+
 /// A spanned value.
 pub type Spanned<T> = (T, SimpleSpan<usize>);
