@@ -1,7 +1,7 @@
 use crate::{
     self as ast,
     lexer::{
-        lexer,
+        lex,
         Token::{self, *},
     },
     util, Span, Spanned,
@@ -56,7 +56,14 @@ fn root<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Root<'src>>
 }
 
 fn definition<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
-    just(Keyword("define")).ignore_then(constant().or(table()))
+    just(Keyword("define")).ignore_then(choice((
+        r#macro(),
+        constant(),
+        table(),
+        sol_function(),
+        sol_event(),
+        sol_error(),
+    )))
 }
 
 fn r#macro<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
@@ -99,7 +106,7 @@ fn macro_statement<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::
     let instruction = instruction().map(ast::MacroStatement::Instruction);
     let invoke = invoke().map(ast::MacroStatement::Invoke);
 
-    recursive(|_r| label.boxed().or(instruction.boxed()).or(invoke.boxed()))
+    choice((label, instruction, invoke))
 }
 
 fn instruction<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Instruction<'src>> {
@@ -289,7 +296,7 @@ fn instruction<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Inst
         .then_ignore(just(Punct(']')))
         .map(ast::Instruction::ConstantReference);
 
-    push_auto.or(push).or(op).or(macro_arg_ref).or(constant_ref)
+    choice((push_auto, push, op, macro_arg_ref, constant_ref))
 }
 
 fn invoke<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Invoke<'src>> {
@@ -321,14 +328,16 @@ fn invoke<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Invoke<'s
     let invoke_event_hash = invoke_builtin("__EVENT_HASH", ast::Invoke::BuiltinEventHash);
     let invoke_error = invoke_builtin("__ERROR", ast::Invoke::BuiltinError);
 
-    invoke_macro
-        .or(invoke_tablestart)
-        .or(invoke_tablesize)
-        .or(invoke_codesize)
-        .or(invoke_codeoffset)
-        .or(invoke_func_sig)
-        .or(invoke_event_hash)
-        .or(invoke_error)
+    choice((
+        invoke_macro,
+        invoke_tablestart,
+        invoke_tablesize,
+        invoke_codesize,
+        invoke_codeoffset,
+        invoke_func_sig,
+        invoke_event_hash,
+        invoke_error,
+    ))
 }
 
 fn constant<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
