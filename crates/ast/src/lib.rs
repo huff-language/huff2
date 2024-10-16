@@ -94,4 +94,4 @@ pub struct SolError<'src> {
 pub type Span = SimpleSpan<usize>;
 
 /// A spanned value.
-pub type Spanned<T> = (T, SimpleSpan<usize>);
+pub type Spanned<T> = (T, Span);
