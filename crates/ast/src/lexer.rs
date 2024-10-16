@@ -2,7 +2,7 @@ use crate::Spanned;
 use chumsky::{
     error::Rich,
     extra,
-    primitive::{any, just, one_of},
+    primitive::{any, choice, just, one_of},
     text::{self, ascii::keyword},
     IterParser, Parser,
 };
@@ -41,7 +41,7 @@ pub fn lexer<'src>(
 
     let dec = text::digits(10).to_slice().map(Token::Dec);
 
-    let token = keyword.or(ident).or(punct).or(hex).or(bin).or(dec);
+    let token = choice((keyword, ident, punct, hex, bin, dec));
 
     // comments
     let single_line_comment = just("//")
