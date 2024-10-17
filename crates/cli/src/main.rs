@@ -1,5 +1,5 @@
 use argh::FromArgs;
-use ariadne::{sources, Color, Label, Report, ReportKind, Source};
+use ariadne::{sources, Color, Config, IndexType, Label, Report, ReportKind};
 use huff_ast::parse;
 use std::{fs::read_to_string, io, process::exit};
 use thiserror::Error;
@@ -19,6 +19,7 @@ fn run(cli: Cli) -> HuffResult {
         Ok(ast) => println!("{:?}", ast),
         Err(errs) => errs.into_iter().for_each(|e| {
             Report::build(ReportKind::Error, filename.clone(), e.span().start)
+                .with_config(Config::default().with_index_type(IndexType::Byte))
                 .with_message(e.reason())
                 .with_label(
                     Label::new((filename.clone(), e.span().into_range()))
