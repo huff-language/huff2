@@ -35,8 +35,7 @@ pub fn parse(src: &str) -> Result<ast::Root<'_>, Vec<Rich<'_, Token<'_>>>> {
     let ast = root()
         .parse(tokens)
         .into_result()
-        .map_err(|errs| errs.into_iter().map(|e| e.into_owned()).collect::<Vec<_>>())
-        .map_err(|e| e)?;
+        .map_err(|errs| errs.into_iter().map(|e| e.into_owned()).collect::<Vec<_>>())?;
 
     Ok(ast)
 }
