@@ -115,7 +115,7 @@ fn macro_statement<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::
     let instruction = instruction().map(ast::MacroStatement::Instruction);
     let invoke = invoke().map(ast::MacroStatement::Invoke);
 
-    choice((label, instruction, invoke))
+    choice((label, invoke, instruction))
 }
 
 fn instruction<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Instruction<'src>> {
@@ -240,7 +240,6 @@ fn invoke<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Invoke<'s
     };
 
     choice((
-        invoke_macro,
         invoke_builtin("__tablestart", ast::Invoke::BuiltinTableStart),
         invoke_builtin("__tablesize", ast::Invoke::BuiltinTableSize),
         invoke_builtin("__codesize", ast::Invoke::BuiltinCodeSize),
@@ -248,6 +247,7 @@ fn invoke<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Invoke<'s
         invoke_builtin("__FUNC_SIG", ast::Invoke::BuiltinFuncSig),
         invoke_builtin("__EVENT_HASH", ast::Invoke::BuiltinEventHash),
         invoke_builtin("__ERROR", ast::Invoke::BuiltinError),
+        invoke_macro,
     ))
 }
 
