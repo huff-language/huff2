@@ -1,5 +1,5 @@
 use crate::{
-    self as ast,
+    ast,
     lexer::{
         lexer,
         Token::{self, *},
