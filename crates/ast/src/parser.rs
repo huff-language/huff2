@@ -1,7 +1,7 @@
 use crate::{
     self as ast,
     lexer::{
-        lex,
+        lexer,
         Token::{self, *},
     },
     util, Span, Spanned,
@@ -11,9 +11,8 @@ use alloy_primitives::{hex::FromHex, Bytes, U256};
 use chumsky::{
     error::Rich,
     extra,
-    input::{Input, Stream},
+    input::{Input, SpannedInput},
     primitive::{choice, just},
-    recovery::{self, skip_then_retry_until},
     recursive::recursive,
     select,
     span::SimpleSpan,
@@ -22,17 +21,28 @@ use chumsky::{
 use evm_glue::opcodes::Opcode;
 use std::str::FromStr;
 
-// pub fn parse<'src>(src: &'src str) -> Result<ast::Root<'src>, Vec<Rich<'src, Token<'src>>>> {
-//     let tokens = lexer().parse(src).into_result()?;
+/// Parse the given source code string into AST.
+///
+/// # Arguments
+///
+/// * `src` - A string that holds the source code to be parsed.
+pub fn parse<'src>(src: &'src str) -> Result<ast::Root<'src>, Vec<Rich<'src, Token<'src>>>> {
+    // TODO: return errors
+    let tokens = lexer()
+        .parse(src)
+        .into_result()
+        .expect("lexer error (TODO)");
 
-//     let token_stream = Stream::from_iter(tokens)
-//         .spanned((src.len()..src.len()).into());
+    let eoi: Span = SimpleSpan::new(src.len(), src.len());
+    let ast = root()
+        .parse(tokens.as_slice().spanned(eoi))
+        .into_result()
+        .expect("parser error (TODO)");
 
-//     root().parse(token_stream.spanned(eoi)).into_result()
-// }
+    Ok(ast)
+}
 
-type ParserInput<'tokens, 'src> =
-    chumsky::input::SpannedInput<Token<'src>, Span, &'tokens [(Token<'src>, Span)]>;
+type ParserInput<'tokens, 'src> = SpannedInput<Token<'src>, Span, &'tokens [Spanned<Token<'src>>]>;
 
 trait Parser<'tokens, 'src: 'tokens, T>:
     ChumskyParser<'tokens, ParserInput<'tokens, 'src>, T, extra::Err<Rich<'tokens, Token<'src>, Span>>>
@@ -313,30 +323,23 @@ fn invoke<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Invoke<'s
         .then(invoke_macro_args)
         .map(|(name, args)| ast::Invoke::Macro { name, args: args });
 
-    let invoke_builtin = |name, constructor: fn((_, SimpleSpan)) -> ast::Invoke<'src>| {
+    let invoke_builtin = |name, constructor: fn((_, Span)) -> ast::Invoke<'src>| {
         just(Ident(name))
             .ignore_then(just(Punct('(')))
             .ignore_then(ident())
             .then_ignore(just(Punct(')')))
             .map(constructor)
     };
-    let invoke_tablestart = invoke_builtin("__tablestart", ast::Invoke::BuiltinTableStart);
-    let invoke_tablesize = invoke_builtin("__tablesize", ast::Invoke::BuiltinTableSize);
-    let invoke_codesize = invoke_builtin("__codesize", ast::Invoke::BuiltinCodeSize);
-    let invoke_codeoffset = invoke_builtin("__codeoffset", ast::Invoke::BuiltinCodeOffset);
-    let invoke_func_sig = invoke_builtin("__FUNC_SIG", ast::Invoke::BuiltinFuncSig);
-    let invoke_event_hash = invoke_builtin("__EVENT_HASH", ast::Invoke::BuiltinEventHash);
-    let invoke_error = invoke_builtin("__ERROR", ast::Invoke::BuiltinError);
 
     choice((
         invoke_macro,
-        invoke_tablestart,
-        invoke_tablesize,
-        invoke_codesize,
-        invoke_codeoffset,
-        invoke_func_sig,
-        invoke_event_hash,
-        invoke_error,
+        invoke_builtin("__tablestart", ast::Invoke::BuiltinTableStart),
+        invoke_builtin("__tablesize", ast::Invoke::BuiltinTableSize),
+        invoke_builtin("__codesize", ast::Invoke::BuiltinCodeSize),
+        invoke_builtin("__codeoffset", ast::Invoke::BuiltinCodeOffset),
+        invoke_builtin("__FUNC_SIG", ast::Invoke::BuiltinFuncSig),
+        invoke_builtin("__EVENT_HASH", ast::Invoke::BuiltinEventHash),
+        invoke_builtin("__ERROR", ast::Invoke::BuiltinError),
     ))
 }
 
@@ -373,6 +376,19 @@ fn sol_function<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Def
             let rets = rets.unwrap_or(Box::new([]));
             ast::Definition::SolFunction(ast::SolFunction { name, args, rets })
         })
+
+    /*
+       .then(
+        choice((just(Ident("public")), just(Ident("external"))))
+            .ignore_then(
+                choice((just(Ident("view")), just(Ident("pure"))))
+                    .or_not()
+                    .ignored(),
+            )
+            .or_not()
+            .then(just(Ident("returns")).ignore_then(sol_type_list()).or_not()),
+    )
+    */
 }
 
 fn sol_event<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
@@ -477,10 +493,8 @@ fn code<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use std::vec;
-
     use super::*;
-    use alloy_primitives::{uint, U256};
+    use alloy_primitives::uint;
     use chumsky::input::Input;
 
     /// Macro to assert that a parser successfully parses a given set of tokens
@@ -814,6 +828,27 @@ mod tests {
                 rets: Box::new([(DynSolType::parse("uint256").unwrap(), span)]),
             })
         );
+        // assert_ok!(
+        //     sol_function(),
+        //     vec![
+        //         Ident("function"),
+        //         Ident("balanceOf"),
+        //         Punct('('),
+        //         Ident("address"),
+        //         Punct(')'),
+        //         Ident("public"),
+        //         Ident("view"),
+        //         Ident("returns"),
+        //         Punct('('),
+        //         Ident("uint256"),
+        //         Punct(')')
+        //     ],
+        //     ast::Definition::SolFunction(ast::SolFunction {
+        //         name: ("balanceOf", span),
+        //         args: Box::new([(DynSolType::parse("address").unwrap(), span)]),
+        //         rets: Box::new([(DynSolType::parse("uint256").unwrap(), span)]),
+        //     })
+        // );
     }
 
     #[test]

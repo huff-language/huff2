@@ -19,7 +19,7 @@ pub enum Token<'src> {
     Bin(&'src str),
 }
 
-pub fn lexer<'src>(
+pub(crate) fn lexer<'src>(
 ) -> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char>>> {
     let keyword = just("#")
         .ignore_then(keyword("define").or(keyword("include")))

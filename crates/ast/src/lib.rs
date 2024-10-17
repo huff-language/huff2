@@ -7,6 +7,8 @@ use alloy_primitives::U256;
 use chumsky::span::SimpleSpan;
 use evm_glue::opcodes::Opcode;
 
+pub use parser::parse;
+
 pub struct Root<'src>(pub Box<[Definition<'src>]>);
 
 #[derive(Debug, PartialEq, Eq)]
