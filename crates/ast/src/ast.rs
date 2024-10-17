@@ -4,7 +4,13 @@ use chumsky::span::SimpleSpan;
 use evm_glue::opcodes::Opcode;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Root<'src>(pub Box<[Definition<'src>]>);
+pub struct Root<'src>(pub Box<[RootSection<'src>]>);
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum RootSection<'src> {
+    Definition(Definition<'src>),
+    Include(Spanned<&'src str>),
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Definition<'src> {
