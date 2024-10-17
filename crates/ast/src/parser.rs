@@ -4,7 +4,8 @@ use crate::{
         lexer,
         Token::{self, *},
     },
-    util, Span, Spanned,
+    util::{u256_as_push, u256_as_push_data},
+    Span, Spanned,
 };
 use alloy_dyn_abi::DynSolType;
 use alloy_primitives::{hex::FromHex, Bytes, U256};
@@ -121,8 +122,7 @@ fn macro_statement<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::
 }
 
 fn instruction<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Instruction<'src>> {
-    let push_auto =
-        word().map(|(value, span)| (ast::Instruction::Op((util::u256_as_push(value), span))));
+    let push_auto = word().map(|(value, span)| (ast::Instruction::Op((u256_as_push(value), span))));
 
     let push = select! {
         Ident("push1") => 1,
@@ -159,137 +159,47 @@ fn instruction<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Inst
         Ident("push32") => 32,
     }
     .then(word())
-    .map(|(n, (value, span))| match n {
-        1 => ast::Instruction::Op((
-            Opcode::PUSH1(util::u256_as_push_data::<1>(value).unwrap()),
+    .map(|(n, (value, span))| {
+        (
+            match n {
+                1 => Opcode::PUSH1(u256_as_push_data::<1>(value).unwrap()),
+                2 => Opcode::PUSH2(u256_as_push_data::<2>(value).unwrap()),
+                3 => Opcode::PUSH3(u256_as_push_data::<3>(value).unwrap()),
+                4 => Opcode::PUSH4(u256_as_push_data::<4>(value).unwrap()),
+                5 => Opcode::PUSH5(u256_as_push_data::<5>(value).unwrap()),
+                6 => Opcode::PUSH6(u256_as_push_data::<6>(value).unwrap()),
+                7 => Opcode::PUSH7(u256_as_push_data::<7>(value).unwrap()),
+                8 => Opcode::PUSH8(u256_as_push_data::<8>(value).unwrap()),
+                9 => Opcode::PUSH9(u256_as_push_data::<9>(value).unwrap()),
+                10 => Opcode::PUSH10(u256_as_push_data::<10>(value).unwrap()),
+                11 => Opcode::PUSH11(u256_as_push_data::<11>(value).unwrap()),
+                12 => Opcode::PUSH12(u256_as_push_data::<12>(value).unwrap()),
+                13 => Opcode::PUSH13(u256_as_push_data::<13>(value).unwrap()),
+                14 => Opcode::PUSH14(u256_as_push_data::<14>(value).unwrap()),
+                15 => Opcode::PUSH15(u256_as_push_data::<15>(value).unwrap()),
+                16 => Opcode::PUSH16(u256_as_push_data::<16>(value).unwrap()),
+                17 => Opcode::PUSH17(u256_as_push_data::<17>(value).unwrap()),
+                18 => Opcode::PUSH18(u256_as_push_data::<18>(value).unwrap()),
+                19 => Opcode::PUSH19(u256_as_push_data::<19>(value).unwrap()),
+                20 => Opcode::PUSH20(u256_as_push_data::<20>(value).unwrap()),
+                21 => Opcode::PUSH21(u256_as_push_data::<21>(value).unwrap()),
+                22 => Opcode::PUSH22(u256_as_push_data::<22>(value).unwrap()),
+                23 => Opcode::PUSH23(u256_as_push_data::<23>(value).unwrap()),
+                24 => Opcode::PUSH24(u256_as_push_data::<24>(value).unwrap()),
+                25 => Opcode::PUSH25(u256_as_push_data::<25>(value).unwrap()),
+                26 => Opcode::PUSH26(u256_as_push_data::<26>(value).unwrap()),
+                27 => Opcode::PUSH27(u256_as_push_data::<27>(value).unwrap()),
+                28 => Opcode::PUSH28(u256_as_push_data::<28>(value).unwrap()),
+                29 => Opcode::PUSH29(u256_as_push_data::<29>(value).unwrap()),
+                30 => Opcode::PUSH30(u256_as_push_data::<30>(value).unwrap()),
+                31 => Opcode::PUSH31(u256_as_push_data::<31>(value).unwrap()),
+                32 => Opcode::PUSH32(u256_as_push_data::<32>(value).unwrap()),
+                _ => unreachable!(),
+            },
             span,
-        )),
-        2 => ast::Instruction::Op((
-            Opcode::PUSH2(util::u256_as_push_data::<2>(value).unwrap()),
-            span,
-        )),
-        3 => ast::Instruction::Op((
-            Opcode::PUSH3(util::u256_as_push_data::<3>(value).unwrap()),
-            span,
-        )),
-        4 => ast::Instruction::Op((
-            Opcode::PUSH4(util::u256_as_push_data::<4>(value).unwrap()),
-            span,
-        )),
-        5 => ast::Instruction::Op((
-            Opcode::PUSH5(util::u256_as_push_data::<5>(value).unwrap()),
-            span,
-        )),
-        6 => ast::Instruction::Op((
-            Opcode::PUSH6(util::u256_as_push_data::<6>(value).unwrap()),
-            span,
-        )),
-        7 => ast::Instruction::Op((
-            Opcode::PUSH7(util::u256_as_push_data::<7>(value).unwrap()),
-            span,
-        )),
-        8 => ast::Instruction::Op((
-            Opcode::PUSH8(util::u256_as_push_data::<8>(value).unwrap()),
-            span,
-        )),
-        9 => ast::Instruction::Op((
-            Opcode::PUSH9(util::u256_as_push_data::<9>(value).unwrap()),
-            span,
-        )),
-        10 => ast::Instruction::Op((
-            Opcode::PUSH10(util::u256_as_push_data::<10>(value).unwrap()),
-            span,
-        )),
-        11 => ast::Instruction::Op((
-            Opcode::PUSH11(util::u256_as_push_data::<11>(value).unwrap()),
-            span,
-        )),
-        12 => ast::Instruction::Op((
-            Opcode::PUSH12(util::u256_as_push_data::<12>(value).unwrap()),
-            span,
-        )),
-        13 => ast::Instruction::Op((
-            Opcode::PUSH13(util::u256_as_push_data::<13>(value).unwrap()),
-            span,
-        )),
-        14 => ast::Instruction::Op((
-            Opcode::PUSH14(util::u256_as_push_data::<14>(value).unwrap()),
-            span,
-        )),
-        15 => ast::Instruction::Op((
-            Opcode::PUSH15(util::u256_as_push_data::<15>(value).unwrap()),
-            span,
-        )),
-        16 => ast::Instruction::Op((
-            Opcode::PUSH16(util::u256_as_push_data::<16>(value).unwrap()),
-            span,
-        )),
-        17 => ast::Instruction::Op((
-            Opcode::PUSH17(util::u256_as_push_data::<17>(value).unwrap()),
-            span,
-        )),
-        18 => ast::Instruction::Op((
-            Opcode::PUSH18(util::u256_as_push_data::<18>(value).unwrap()),
-            span,
-        )),
-        19 => ast::Instruction::Op((
-            Opcode::PUSH19(util::u256_as_push_data::<19>(value).unwrap()),
-            span,
-        )),
-        20 => ast::Instruction::Op((
-            Opcode::PUSH20(util::u256_as_push_data::<20>(value).unwrap()),
-            span,
-        )),
-        21 => ast::Instruction::Op((
-            Opcode::PUSH21(util::u256_as_push_data::<21>(value).unwrap()),
-            span,
-        )),
-        22 => ast::Instruction::Op((
-            Opcode::PUSH22(util::u256_as_push_data::<22>(value).unwrap()),
-            span,
-        )),
-        23 => ast::Instruction::Op((
-            Opcode::PUSH23(util::u256_as_push_data::<23>(value).unwrap()),
-            span,
-        )),
-        24 => ast::Instruction::Op((
-            Opcode::PUSH24(util::u256_as_push_data::<24>(value).unwrap()),
-            span,
-        )),
-        25 => ast::Instruction::Op((
-            Opcode::PUSH25(util::u256_as_push_data::<25>(value).unwrap()),
-            span,
-        )),
-        26 => ast::Instruction::Op((
-            Opcode::PUSH26(util::u256_as_push_data::<26>(value).unwrap()),
-            span,
-        )),
-        27 => ast::Instruction::Op((
-            Opcode::PUSH27(util::u256_as_push_data::<27>(value).unwrap()),
-            span,
-        )),
-        28 => ast::Instruction::Op((
-            Opcode::PUSH28(util::u256_as_push_data::<28>(value).unwrap()),
-            span,
-        )),
-        29 => ast::Instruction::Op((
-            Opcode::PUSH29(util::u256_as_push_data::<29>(value).unwrap()),
-            span,
-        )),
-        30 => ast::Instruction::Op((
-            Opcode::PUSH30(util::u256_as_push_data::<30>(value).unwrap()),
-            span,
-        )),
-        31 => ast::Instruction::Op((
-            Opcode::PUSH31(util::u256_as_push_data::<31>(value).unwrap()),
-            span,
-        )),
-        32 => ast::Instruction::Op((
-            Opcode::PUSH32(util::u256_as_push_data::<32>(value).unwrap()),
-            span,
-        )),
-        _ => unreachable!(),
-    });
+        )
+    })
+    .map(ast::Instruction::Op);
 
     let op = ident().map(|(ident, span)| {
         if let Ok(op) = Opcode::from_str(ident) {
