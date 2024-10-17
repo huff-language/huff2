@@ -1,10 +1,11 @@
-use clap::Parser as ClapParser;
+use argh::FromArgs;
+use ariadne::{sources, Color, Config, IndexType, Label, Report, ReportKind};
 use huff_ast::parse;
 use std::{fs::read_to_string, io, process::exit};
 use thiserror::Error;
 
 fn main() {
-    let cli = Cli::parse();
+    let cli = argh::from_env();
     if let Err(e) = run(cli) {
         eprintln!("error: {}", e);
         exit(1);
@@ -13,9 +14,22 @@ fn main() {
 
 fn run(cli: Cli) -> HuffResult {
     let src = read_to_string(&cli.filename)?;
+    let filename: String = cli.filename;
     match parse(&src) {
         Ok(ast) => println!("{:?}", ast),
-        Err(e) => println!("error: {}", e),
+        Err(errs) => errs.into_iter().for_each(|e| {
+            Report::build(ReportKind::Error, filename.clone(), e.span().start)
+                .with_config(Config::default().with_index_type(IndexType::Byte))
+                .with_message(e.reason())
+                .with_label(
+                    Label::new((filename.clone(), e.span().into_range()))
+                        .with_message(e.reason())
+                        .with_color(Color::Red),
+                )
+                .finish()
+                .print(sources([(filename.clone(), &src)]))
+                .unwrap()
+        }),
     }
 
     Ok(())
@@ -33,9 +47,10 @@ enum HuffError {
 
 type HuffResult = Result<(), HuffError>;
 
-#[derive(ClapParser)]
-#[command(name = "huff")]
+#[derive(FromArgs)]
+/// Huff Language Compiler
 struct Cli {
-    /// Filename
+    /// filename
+    #[argh(positional)]
     filename: String,
 }

@@ -1,5 +1,5 @@
 name: Rust CI
-on: [push]
+on: [push, pull_request]
 
 env:
   CARGO_TERM_COLOR: always
@@ -49,4 +49,4 @@ jobs:
           cache-on-failure: true
       - name: build
         id: build
-        run: cargo build --workspace --all --locked 
+        run: cargo build --workspace --all --locked

@@ -7,8 +7,7 @@ license.workspace = true
 [dependencies]
 huff-ast.workspace = true
 ariadne.workspace = true
-clap.workspace = true
-lalrpop-util.workspace = true
+argh.workspace = true
 thiserror.workspace = true
 
 [[bin]]
