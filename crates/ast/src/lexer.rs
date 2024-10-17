@@ -27,6 +27,7 @@ pub enum Token<'src> {
     Dec(&'src str),
     Hex(&'src str),
     Bin(&'src str),
+    String(&'src str),
 
     Error(char),
 }
@@ -39,7 +40,8 @@ impl fmt::Display for Token<'_> {
             | Token::Ident(s)
             | Token::Dec(s)
             | Token::Hex(s)
-            | Token::Bin(s) => write!(f, "{}", s),
+            | Token::Bin(s)
+            | Token::String(s) => write!(f, "{}", s),
             Token::Punct(c) | Token::Error(c) => write!(f, "{}", c),
         }
     }
@@ -83,7 +85,12 @@ fn lexer<'src>(
         .to_slice()
         .map(Token::Dec);
 
-    let token = choice((keyword, ident, punct, hex, bin, dec));
+    let string = just("\"")
+        .ignore_then(any().and_is(just("\"").not()).repeated().to_slice())
+        .then_ignore(just("\""))
+        .map(Token::String);
+
+    let token = choice((keyword, ident, punct, hex, bin, dec, string));
 
     // comments
     let single_line_comment = just("//")
@@ -184,5 +191,15 @@ mod tests {
     fn lex_bin() {
         assert_ok!("0b101", (Token::Bin("0b101"), SimpleSpan::new(0, 5)));
         assert_ok!("0b0", (Token::Bin("0b0"), SimpleSpan::new(0, 3)));
+    }
+
+    #[test]
+    fn lex_string() {
+        assert_ok!("\"\"", (Token::String(""), SimpleSpan::new(0, 2)));
+        assert_ok!("\"foo\"", (Token::String("foo"), SimpleSpan::new(0, 5)));
+        assert_ok!(
+            "\"foo bar\"",
+            (Token::String("foo bar"), SimpleSpan::new(0, 9))
+        );
     }
 }
