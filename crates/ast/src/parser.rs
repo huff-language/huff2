@@ -26,7 +26,7 @@ use std::str::FromStr;
 /// # Arguments
 ///
 /// * `src` - A string that holds the source code to be parsed.
-pub fn parse<'src>(src: &'src str) -> Result<ast::Root<'src>, Vec<Rich<'src, Token<'src>>>> {
+pub fn parse(src: &str) -> Result<ast::Root<'_>, Vec<Rich<'_, Token<'_>>>> {
     // TODO: return errors
     let tokens = lexer()
         .parse(src)
@@ -321,7 +321,7 @@ fn invoke<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Invoke<'s
 
     let invoke_macro = ident()
         .then(invoke_macro_args)
-        .map(|(name, args)| ast::Invoke::Macro { name, args: args });
+        .map(|(name, args)| ast::Invoke::Macro { name, args });
 
     let invoke_builtin = |name, constructor: fn((_, Span)) -> ast::Invoke<'src>| {
         just(Ident(name))
