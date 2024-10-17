@@ -57,10 +57,18 @@ impl<'tokens, 'src: 'tokens, P, T> Parser<'tokens, 'src, T> for P where
 }
 
 fn root<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Root<'src>> {
-    definition()
+    root_section()
         .repeated()
         .collect::<Vec<_>>()
         .map(|defs| ast::Root(defs.into_boxed_slice()))
+}
+
+fn root_section<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::RootSection<'src>> {
+    let include = just(Keyword("include"))
+        .ignore_then(select! {String(s) => s}.map_with(|s, ex| (s, ex.span())))
+        .map(ast::RootSection::Include);
+
+    choice((definition().map(ast::RootSection::Definition), include))
 }
 
 fn definition<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
@@ -470,6 +478,25 @@ mod tests {
     fn parse_code() {
         assert_ok!(code(), vec![Hex("0xc0de")], vec![0xc0, 0xde]);
         assert_err!(code(), vec![Hex("0x0")], "odd length");
+    }
+
+    #[test]
+    fn parse_root_section() {
+        let span: Span = SimpleSpan::new(0, 0);
+
+        assert_ok!(
+            root_section(),
+            vec![Keyword("include"), String("test")],
+            ast::RootSection::Include(("test", span))
+        );
+        assert_ok!(
+            root_section(),
+            vec![Keyword("define"), Ident("constant"), Ident("TEST"), Punct('='), Hex("0x1")],
+            ast::RootSection::Definition(ast::Definition::Constant {
+                name: ("TEST", span),
+                value: uint!(1_U256)
+            })
+        );
     }
 
     #[test]
