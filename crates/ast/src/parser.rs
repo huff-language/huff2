@@ -30,13 +30,13 @@ use std::str::FromStr;
 pub fn parse(src: &str) -> Result<ast::Root<'_>, Vec<Rich<'_, Token<'_>>>> {
     let tokens = lex(src)?;
 
-    // TODO: return errors
     let eoi: Span = SimpleSpan::new(src.len(), src.len());
     let tokens = tokens.as_slice().spanned(eoi);
     let ast = root()
         .parse(tokens)
         .into_result()
-        .expect("parser error (TODO)");
+        .map_err(|errs| errs.into_iter().map(|e| e.into_owned()).collect::<Vec<_>>())
+        .map_err(|e| e)?;
 
     Ok(ast)
 }
