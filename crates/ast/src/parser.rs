@@ -34,8 +34,9 @@ pub fn parse(src: &str) -> Result<ast::Root<'_>, Vec<Rich<'_, Token<'_>>>> {
         .expect("lexer error (TODO)");
 
     let eoi: Span = SimpleSpan::new(src.len(), src.len());
+    let tokens = tokens.as_slice().spanned(eoi);
     let ast = root()
-        .parse(tokens.as_slice().spanned(eoi))
+        .parse(tokens)
         .into_result()
         .expect("parser error (TODO)");
 
@@ -371,24 +372,19 @@ fn sol_function<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Def
     just(Ident("function"))
         .ignore_then(ident())
         .then(sol_type_list())
-        .then(just(Ident("returns")).ignore_then(sol_type_list()).or_not())
+        .then(
+            choice((just(Ident("public")), just(Ident("external"))))
+                .then_ignore(choice((just(Ident("view")), just(Ident("pure")))).or_not())
+                .then_ignore(choice((just(Ident("payable")), just(Ident("nonpayable")))).or_not())
+                .or_not()
+                .ignore_then(just(Ident("returns")))
+                .ignore_then(sol_type_list())
+                .or_not(),
+        )
         .map(|((name, args), rets)| {
             let rets = rets.unwrap_or(Box::new([]));
             ast::Definition::SolFunction(ast::SolFunction { name, args, rets })
         })
-
-    /*
-       .then(
-        choice((just(Ident("public")), just(Ident("external"))))
-            .ignore_then(
-                choice((just(Ident("view")), just(Ident("pure"))))
-                    .or_not()
-                    .ignored(),
-            )
-            .or_not()
-            .then(just(Ident("returns")).ignore_then(sol_type_list()).or_not()),
-    )
-    */
 }
 
 fn sol_event<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
@@ -828,27 +824,27 @@ mod tests {
                 rets: Box::new([(DynSolType::parse("uint256").unwrap(), span)]),
             })
         );
-        // assert_ok!(
-        //     sol_function(),
-        //     vec![
-        //         Ident("function"),
-        //         Ident("balanceOf"),
-        //         Punct('('),
-        //         Ident("address"),
-        //         Punct(')'),
-        //         Ident("public"),
-        //         Ident("view"),
-        //         Ident("returns"),
-        //         Punct('('),
-        //         Ident("uint256"),
-        //         Punct(')')
-        //     ],
-        //     ast::Definition::SolFunction(ast::SolFunction {
-        //         name: ("balanceOf", span),
-        //         args: Box::new([(DynSolType::parse("address").unwrap(), span)]),
-        //         rets: Box::new([(DynSolType::parse("uint256").unwrap(), span)]),
-        //     })
-        // );
+        assert_ok!(
+            sol_function(),
+            vec![
+                Ident("function"),
+                Ident("balanceOf"),
+                Punct('('),
+                Ident("address"),
+                Punct(')'),
+                Ident("public"),
+                Ident("view"),
+                Ident("returns"),
+                Punct('('),
+                Ident("uint256"),
+                Punct(')')
+            ],
+            ast::Definition::SolFunction(ast::SolFunction {
+                name: ("balanceOf", span),
+                args: Box::new([(DynSolType::parse("address").unwrap(), span)]),
+                rets: Box::new([(DynSolType::parse("uint256").unwrap(), span)]),
+            })
+        );
     }
 
     #[test]
