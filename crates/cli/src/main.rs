@@ -1,10 +1,10 @@
-use clap::Parser as ClapParser;
+use argh::FromArgs;
 use huff_ast::parse;
 use std::{fs::read_to_string, io, process::exit};
 use thiserror::Error;
 
 fn main() {
-    let cli = Cli::parse();
+    let cli = argh::from_env();
     if let Err(e) = run(cli) {
         eprintln!("error: {}", e);
         exit(1);
@@ -33,9 +33,10 @@ enum HuffError {
 
 type HuffResult = Result<(), HuffError>;
 
-#[derive(ClapParser)]
-#[command(name = "huff")]
+#[derive(FromArgs)]
+/// Huff Language Compiler
 struct Cli {
-    /// Filename
+    /// filename
+    #[argh(positional)]
     filename: String,
 }

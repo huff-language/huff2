@@ -15,7 +15,7 @@ huff-ast = { path = "crates/ast" }
 alloy-dyn-abi = "0.8"
 alloy-primitives = "0.8"
 ariadne = { version = "0.4.1", features = ["auto-color"] }
-clap = { version = "4", features = ["derive"] }
+argh = "0.1"
 evm-glue = { git = "https://github.com/Philogy/evm-glue.git", rev = "b51f6a0" }
 chumsky = { git = "https://github.com/zesterer/chumsky.git", rev = "716bec8" }
 thiserror = "1"
