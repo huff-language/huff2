@@ -12,7 +12,7 @@ use std::fmt;
 pub(crate) fn lex(src: &str) -> Result<Vec<Spanned<Token>>, Vec<Rich<'_, Token<'_>>>> {
     lexer().parse(src).into_result().map_err(|e| {
         e.into_iter()
-            .map(|errs| errs.map_token(|c| Token::Error(c)))
+            .map(|errs| errs.map_token(Token::Error))
             .collect::<Vec<_>>()
     })
 }
