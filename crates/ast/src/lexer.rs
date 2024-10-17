@@ -6,6 +6,16 @@ use chumsky::{
     text::{self, ascii::keyword},
     IterParser, Parser,
 };
+use std::fmt;
+
+/// Lex the given source code string into tokens.
+pub(crate) fn lex(src: &str) -> Result<Vec<Spanned<Token>>, Vec<Rich<'_, Token<'_>>>> {
+    lexer().parse(src).into_result().map_err(|e| {
+        e.into_iter()
+            .map(|e| e.map_token(|c| Token::Error(c)))
+            .collect::<Vec<_>>()
+    })
+}
 
 /// Lexer token
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,9 +27,25 @@ pub enum Token<'src> {
     Dec(&'src str),
     Hex(&'src str),
     Bin(&'src str),
+
+    Error(char),
 }
 
-pub(crate) fn lexer<'src>(
+impl<'src> fmt::Display for Token<'src> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Token::Comment(s)
+            | Token::Keyword(s)
+            | Token::Ident(s)
+            | Token::Dec(s)
+            | Token::Hex(s)
+            | Token::Bin(s) => write!(f, "{}", s),
+            Token::Punct(c) | Token::Error(c) => write!(f, "{}", c),
+        }
+    }
+}
+
+fn lexer<'src>(
 ) -> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char>>> {
     let keyword = just("#")
         .ignore_then(keyword("define").or(keyword("include")))

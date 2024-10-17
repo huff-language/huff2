@@ -1,7 +1,7 @@
 use crate::{
     ast,
     lexer::{
-        lexer,
+        lex,
         Token::{self, *},
     },
     util::{u256_as_push, u256_as_push_data},
@@ -28,12 +28,9 @@ use std::str::FromStr;
 ///
 /// * `src` - A string that holds the source code to be parsed.
 pub fn parse(src: &str) -> Result<ast::Root<'_>, Vec<Rich<'_, Token<'_>>>> {
-    // TODO: return errors
-    let tokens = lexer()
-        .parse(src)
-        .into_result()
-        .expect("lexer error (TODO)");
+    let tokens = lex(src)?;
 
+    // TODO: return errors
     let eoi: Span = SimpleSpan::new(src.len(), src.len());
     let tokens = tokens.as_slice().spanned(eoi);
     let ast = root()
