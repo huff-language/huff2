@@ -12,7 +12,7 @@ use std::fmt;
 pub(crate) fn lex(src: &str) -> Result<Vec<Spanned<Token>>, Vec<Rich<'_, Token<'_>>>> {
     lexer().parse(src).into_result().map_err(|e| {
         e.into_iter()
-            .map(|errs| errs.map_token(|c| Token::Error(c)))
+            .map(|errs| errs.map_token(Token::Error))
             .collect::<Vec<_>>()
     })
 }
@@ -31,7 +31,7 @@ pub enum Token<'src> {
     Error(char),
 }
 
-impl<'src> fmt::Display for Token<'src> {
+impl fmt::Display for Token<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Token::Comment(s)
