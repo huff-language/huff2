@@ -9,6 +9,7 @@ use evm_glue::opcodes::Opcode;
 
 pub use parser::parse;
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Root<'src>(pub Box<[Definition<'src>]>);
 
 #[derive(Debug, PartialEq, Eq)]
@@ -68,7 +69,7 @@ pub enum Invoke<'src> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Jumptable<'src> {
-    pub name: &'src str,
+    pub name: (Span, &'src str),
     pub size: u8,
     pub labels: Box<[&'src str]>,
 }

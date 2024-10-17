@@ -1,0 +1,15 @@
+[package]
+name = "huff-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+huff-ast.workspace = true
+ariadne.workspace = true
+clap.workspace = true
+thiserror.workspace = true
+
+[[bin]]
+name = "huff"
+path = "src/main.rs"
