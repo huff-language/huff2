@@ -252,11 +252,19 @@ fn invoke<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Invoke<'s
 }
 
 fn constant<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
+    let const_expr = choice((
+        word().map(|(value, span)| (ast::ConstExpr::Value(value), span)),
+        just(Ident("FREE_STORAGE_POINTER"))
+            .ignore_then(just(Punct('(')))
+            .ignore_then(just(Punct(')')))
+            .map_with(|_, ex| (ast::ConstExpr::FreeStoragePointer, ex.span())),
+    ));
+
     just(Ident("constant"))
         .ignore_then(ident())
         .then_ignore(punct('='))
-        .then(word())
-        .map(|(name, (value, _))| ast::Definition::Constant { name, value })
+        .then(const_expr)
+        .map(|(name, expr)| ast::Definition::Constant { name, expr })
 }
 
 fn table<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
@@ -283,13 +291,18 @@ fn sol_function<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Def
         .ignore_then(ident())
         .then(sol_type_list())
         .then(
-            choice((just(Ident("public")), just(Ident("external"))))
-                .then_ignore(choice((just(Ident("view")), just(Ident("pure")))).or_not())
-                .then_ignore(choice((just(Ident("payable")), just(Ident("nonpayable")))).or_not())
-                .or_not()
-                .ignore_then(just(Ident("returns")))
-                .ignore_then(sol_type_list())
-                .or_not(),
+            choice((
+                just(Ident("public")),
+                just(Ident("external")),
+                just(Ident("payable")),
+                just(Ident("nonpayable")),
+            ))
+            .or_not()
+            .then_ignore(choice((just(Ident("view")), just(Ident("pure")))).or_not())
+            .or_not()
+            .ignore_then(just(Ident("returns")))
+            .ignore_then(sol_type_list())
+            .or_not(),
         )
         .map(|((name, args), rets)| {
             let rets = rets.unwrap_or(Box::new([]));
@@ -607,7 +620,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_constant() {
+    fn parse_constant_value() {
         let span: Span = SimpleSpan::new(0, 0);
 
         assert_ok!(
@@ -615,7 +628,28 @@ mod tests {
             vec![Ident("constant"), Ident("TEST"), Punct('='), Hex("0x1")],
             ast::Definition::Constant {
                 name: ("TEST", span),
-                value: uint!(1_U256)
+                expr: (ast::ConstExpr::Value(uint!(1_U256)), span)
+            }
+        );
+    }
+
+    #[test]
+    fn parse_constant_storage_pointer() {
+        let span: Span = SimpleSpan::new(0, 0);
+
+        assert_ok!(
+            constant(),
+            vec![
+                Ident("constant"),
+                Ident("VAR_LOCATION"),
+                Punct('='),
+                Ident("FREE_STORAGE_POINTER"),
+                Punct('('),
+                Punct(')')
+            ],
+            ast::Definition::Constant {
+                name: ("VAR_LOCATION", span),
+                expr: (ast::ConstExpr::FreeStoragePointer, span)
             }
         );
     }
