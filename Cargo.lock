@@ -167,6 +167,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "analysis"
+version = "0.0.1"
+dependencies = [
+ "huff-ast",
+]
+
+[[package]]
 name = "argh"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
