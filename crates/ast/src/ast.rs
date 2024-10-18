@@ -9,7 +9,7 @@ pub struct Root<'src>(pub Box<[RootSection<'src>]>);
 #[derive(Debug, PartialEq, Eq)]
 pub enum RootSection<'src> {
     Definition(Definition<'src>),
-    Include(Spanned<&'src str>),
+    Include(Spanned<String>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
