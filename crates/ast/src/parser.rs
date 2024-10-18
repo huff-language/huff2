@@ -496,8 +496,8 @@ mod tests {
 
         assert_ok!(
             root_section(),
-            vec![Keyword("include"), String("test")],
-            ast::RootSection::Include(("test", span))
+            vec![Keyword("include"), String("test".to_string())],
+            ast::RootSection::Include(("test".to_string(), span))
         );
         assert_ok!(
             root_section(),
