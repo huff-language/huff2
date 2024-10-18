@@ -198,7 +198,7 @@ mod tests {
     #[test]
     fn lex_string() {
         assert_ok!("\"\"", (Token::String(""), SimpleSpan::new(0, 2)));
-        assert_ok!("\"\\\"\"", (Token::String("\\\""), SimpleSpan::new(0, 4)));
+        assert_ok!("\"\\\"\"", (Token::String("\""), SimpleSpan::new(0, 4)));
         assert_ok!("\"foo\"", (Token::String("foo"), SimpleSpan::new(0, 5)));
         assert_ok!(
             "\"foo bar\"",
