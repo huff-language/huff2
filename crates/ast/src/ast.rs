@@ -17,7 +17,7 @@ pub enum Definition<'src> {
     Macro(Macro<'src>),
     Constant {
         name: Spanned<&'src str>,
-        value: U256,
+        expr: Spanned<ConstExpr>,
     },
     Jumptable(Jumptable<'src>),
     Table {
@@ -35,6 +35,12 @@ pub struct Macro<'src> {
     pub args: Box<[Spanned<&'src str>]>,
     pub takes_returns: Option<(Spanned<usize>, Spanned<usize>)>,
     pub body: Box<[MacroStatement<'src>]>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ConstExpr {
+    Value(U256),
+    FreeStoragePointer,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -69,7 +75,7 @@ pub enum Invoke<'src> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Jumptable<'src> {
-    pub name: (Span, &'src str),
+    pub name: Spanned<&'src str>,
     pub size: u8,
     pub labels: Box<[&'src str]>,
 }
