@@ -500,7 +500,7 @@ mod tests {
             vec![Keyword("define"), Ident("constant"), Ident("TEST"), Punct('='), Hex("0x1")],
             ast::RootSection::Definition(ast::Definition::Constant {
                 name: ("TEST", span),
-                value: uint!(1_U256)
+                expr: (ast::ConstExpr::Value(uint!(1_U256)), span)
             })
         );
     }
