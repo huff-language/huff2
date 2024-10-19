@@ -3,10 +3,10 @@ use alloy_primitives::U256;
 use chumsky::span::SimpleSpan;
 use evm_glue::opcodes::Opcode;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Root<'src>(pub Box<[RootSection<'src>]>);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RootSection<'src> {
     Definition(Definition<'src>),
     Include(Spanned<&'src str>),
