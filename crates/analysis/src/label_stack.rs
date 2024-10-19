@@ -24,7 +24,7 @@ impl<'a, V> LabelStack<'a, V> {
         Some(previous_size)
     }
 
-    pub fn insert(&mut self, label: &'a str, value: V) {
+    pub fn push(&mut self, label: &'a str, value: V) {
         self.label_stack.push((label, value));
     }
 
@@ -49,7 +49,7 @@ impl<'a, V> LabelStack<'a, V> {
 
 impl<'a> LabelStack<'a, ()> {
     pub fn add(&mut self, label: &'a str) {
-        self.insert(label, ());
+        self.push(label, ());
     }
 }
 
