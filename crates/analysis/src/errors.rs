@@ -21,7 +21,7 @@ pub enum AnalysisError<'ast, 'src> {
         name: &'ast Spanned<&'src str>,
     },
     MacroArgumentCountMismatch {
-        scope: &'ast Macro<'src>,
+        scope: Option<&'ast Macro<'src>>,
         args: &'ast [Instruction<'src>],
         target: &'ast Macro<'src>,
     },

@@ -4,7 +4,7 @@ use crate::{
         lex,
         Token::{self, *},
     },
-    util::{u256_as_push, u256_as_push_data},
+    util::u256_as_push_data,
     Span, Spanned,
 };
 use alloy_dyn_abi::DynSolType;
