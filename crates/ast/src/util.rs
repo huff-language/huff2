@@ -16,7 +16,7 @@ pub(crate) fn u256_as_push_data<const N: usize>(value: U256) -> Result<[u8; N], 
     Ok(output)
 }
 
-pub(crate) fn u256_as_push(value: U256) -> Opcode {
+pub fn u256_as_push(value: U256) -> Opcode {
     match value.byte_len() {
         0..=1 => u256_as_push_data::<1>(value).map(Opcode::PUSH1).unwrap(),
         2 => u256_as_push_data::<2>(value).map(Opcode::PUSH2).unwrap(),
