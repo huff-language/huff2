@@ -154,11 +154,11 @@ fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
         MacroStatement::Invoke(invoke) => match invoke {
             Invoke::Macro { name, args } => {
                 // Check the arguments in the invocatino.
+                #[allow(clippy::redundant_closure)]
                 args.iter()
                     .filter_map(|arg| analyze_instruction(arg, label_stack))
                     .for_each(
                         // Not actually redundant so making clippy stfu here.
-                        #[allow(clippy::redundant_closure)]
                         |err| emit_error(err),
                     );
                 // Emit error if we don't find at least 1 macro by the given name.

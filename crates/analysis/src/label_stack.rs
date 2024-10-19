@@ -53,7 +53,7 @@ impl<'a> LabelStack<'a, ()> {
     }
 }
 
-impl<'a, V> Default for LabelStack<'a, V> {
+impl<V> Default for LabelStack<'_, V> {
     fn default() -> Self {
         Self::new()
     }
