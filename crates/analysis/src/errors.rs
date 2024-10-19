@@ -1,6 +1,6 @@
 use huff_ast::{Definition, Instruction, Invoke, Macro, Spanned};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AnalysisError<'ast, 'src> {
     /// When two different definitions have the same.
     DefinitionNameCollision {
@@ -12,10 +12,12 @@ pub enum AnalysisError<'ast, 'src> {
     },
     ReferenceNotFound {
         scope: &'ast Macro<'src>,
+        ref_type: &'static str,
         not_found: &'ast Instruction<'src>,
     },
-    MacroNotFound {
+    DefinitionNotFound {
         scope: &'ast Macro<'src>,
+        def_type: &'static str,
         name: &'ast Spanned<&'src str>,
     },
     MacroArgumentCountMismatch {
@@ -30,5 +32,9 @@ pub enum AnalysisError<'ast, 'src> {
     DuplicateMacroArgDefinition {
         scope: &'ast Macro<'src>,
         duplicates: Box<[&'ast Spanned<&'src str>]>,
+    },
+    NotYetSupported {
+        intent: String,
+        span: Spanned<()>,
     },
 }

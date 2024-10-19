@@ -170,6 +170,7 @@ dependencies = [
 name = "analysis"
 version = "0.0.1"
 dependencies = [
+ "chumsky",
  "huff-ast",
 ]
 

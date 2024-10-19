@@ -6,48 +6,15 @@ use crate::label_stack::LabelStack;
 use huff_ast::{Definition, IdentifiableNode, Instruction, Invoke, Macro, MacroStatement};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub fn analyze<
-    'src,
-    'ast: 'src,
-    I: Iterator<Item = &'ast Definition<'src>>,
-    E: FnMut(AnalysisError<'ast, 'src>),
->(
-    defs: I,
+pub fn analyze_global_for_dups<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
+    global_defs: &BTreeMap<&'src str, Vec<&'ast Definition<'src>>>,
     mut emit_error: E,
 ) -> BTreeMap<&'src str, &'ast Definition<'src>> {
-    let global_defs = build_ident_map(defs);
-
-    let mut analyzed_macros: BTreeSet<&str> = BTreeSet::new();
-    let mut invoke_stack: Vec<(&'ast Macro<'src>, &'ast Invoke<'src>)> = Vec::with_capacity(32);
-    let mut label_stack: LabelStack<'src, ()> = LabelStack::new();
-
-    global_defs.iter().for_each(|(_, defs)| {
-        defs.iter()
-            .filter_map(|def| {
-                if let Definition::Macro(m) = def {
-                    Some(m)
-                } else {
-                    None
-                }
-            })
-            .for_each(|m| {
-                analyze_macro(
-                    &global_defs,
-                    m,
-                    &mut label_stack,
-                    &mut invoke_stack,
-                    &mut analyzed_macros,
-                    &mut emit_error,
-                );
-                analyzed_macros.insert(m.ident());
-            })
-    });
-
     global_defs
-        .into_iter()
+        .iter()
         .filter_map(|(name, found_defs)| match found_defs.as_slice() {
-            &[sole_def] => Some((name, sole_def)),
             [] => None,
+            [found_def] => Some((*name, *found_def)),
             many_defs => {
                 emit_error(AnalysisError::DefinitionNameCollision {
                     collided: many_defs.to_vec().into_boxed_slice(),
@@ -57,6 +24,25 @@ pub fn analyze<
             }
         })
         .collect()
+}
+
+pub fn analyze_entry_point<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
+    global_defs: &BTreeMap<&'src str, Vec<&'ast Definition<'src>>>,
+    entry_point: &'ast Macro<'src>,
+    mut emit_error: E,
+) {
+    let mut analyzed_macros: BTreeSet<&str> = BTreeSet::new();
+    let mut invoke_stack: Vec<(&'ast Macro<'src>, &'ast Invoke<'src>)> = Vec::with_capacity(32);
+    let mut label_stack: LabelStack<'src, ()> = LabelStack::new();
+
+    analyze_macro(
+        global_defs,
+        entry_point,
+        &mut label_stack,
+        &mut invoke_stack,
+        &mut analyzed_macros,
+        &mut emit_error,
+    );
 }
 
 macro_rules! global_exists {
@@ -125,6 +111,7 @@ fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
                 if !label_stack.contains(label.ident()) {
                     Some(AnalysisError::ReferenceNotFound {
                         scope: m,
+                        ref_type: "label",
                         not_found: instruction,
                     })
                 } else {
@@ -135,6 +122,7 @@ fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
                 if !in_ident_map(&macro_args, arg.ident()) {
                     Some(AnalysisError::ReferenceNotFound {
                         scope: m,
+                        ref_type: "macro argument",
                         not_found: instruction,
                     })
                 } else {
@@ -143,9 +131,10 @@ fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
             }
             Instruction::ConstantReference(const_ref) => {
                 if !global_exists!(global_defs, const_ref.ident(), Definition::Constant { .. }) {
-                    Some(AnalysisError::ReferenceNotFound {
+                    Some(AnalysisError::DefinitionNotFound {
                         scope: m,
-                        not_found: instruction,
+                        def_type: "constant",
+                        name: const_ref,
                     })
                 } else {
                     None
@@ -168,7 +157,11 @@ fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
                     .for_each(|err| emit_error(err));
                 // Emit error if we don't find at least 1 macro by the given name.
                 if !global_exists!(global_defs, name.ident(), Definition::Macro(_)) {
-                    emit_error(AnalysisError::MacroNotFound { scope: m, name });
+                    emit_error(AnalysisError::DefinitionNotFound {
+                        scope: m,
+                        def_type: "macro",
+                        name,
+                    });
                 }
                 invoke_stack.push((m, invoke));
 
@@ -206,14 +199,70 @@ fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
 
                 validated_macros.insert(name.ident());
             }
-            _ => todo!(),
+            Invoke::BuiltinTableSize(table_ref) | Invoke::BuiltinTableStart(table_ref) => {
+                if !global_exists!(
+                    global_defs,
+                    table_ref.ident(),
+                    Definition::Table { .. } | Definition::Jumptable(_)
+                ) {
+                    emit_error(AnalysisError::DefinitionNotFound {
+                        scope: m,
+                        def_type: "table",
+                        name: table_ref,
+                    })
+                }
+            }
+            Invoke::BuiltinCodeSize(code_ref) | Invoke::BuiltinCodeOffset(code_ref) => {
+                if !global_exists!(global_defs, code_ref.ident(), Definition::Macro(_)) {
+                    emit_error(AnalysisError::DefinitionNotFound {
+                        scope: m,
+                        def_type: "macro",
+                        name: code_ref,
+                    })
+                }
+                if global_defs
+                    .get(code_ref.ident())
+                    .map(|defs| {
+                        defs.iter()
+                            .any(|def| matches!(def, Definition::Macro(m) if m.args.len() > 0))
+                    })
+                    .unwrap_or(false)
+                {
+                    emit_error(AnalysisError::NotYetSupported {
+                        intent: "code introspection for macros with arguments".to_owned(),
+                        span: ((), code_ref.1),
+                    })
+                }
+            }
+            Invoke::BuiltinFuncSig(func_or_error_ref) | Invoke::BuiltinError(func_or_error_ref) => {
+                if !global_exists!(
+                    global_defs,
+                    func_or_error_ref.ident(),
+                    Definition::SolFunction(_) | Definition::SolError(_)
+                ) {
+                    emit_error(AnalysisError::DefinitionNotFound {
+                        scope: m,
+                        def_type: "solidity function / error",
+                        name: func_or_error_ref,
+                    })
+                }
+            }
+            Invoke::BuiltinEventHash(event_ref) => {
+                if !global_exists!(global_defs, event_ref.ident(), Definition::SolEvent(_)) {
+                    emit_error(AnalysisError::DefinitionNotFound {
+                        scope: m,
+                        def_type: "solidity event",
+                        name: event_ref,
+                    })
+                }
+            }
         },
     });
 
     label_stack.leave_context();
 }
 
-fn build_ident_map<'ast, 'src, N: IdentifiableNode<'src>, I: Iterator<Item = &'ast N>>(
+pub fn build_ident_map<'ast, 'src, N: IdentifiableNode<'src>, I: Iterator<Item = &'ast N>>(
     nodes: I,
 ) -> BTreeMap<&'src str, Vec<&'ast N>> {
     let mut ident_map: BTreeMap<&'src str, Vec<&'ast N>> = BTreeMap::new();
@@ -231,4 +280,230 @@ fn in_ident_map<'ast, 'src, N: IdentifiableNode<'src>>(
     ident: &'src str,
 ) -> bool {
     ident_map.get(ident).map(|found| found.len()).unwrap_or(0) > 0
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use chumsky::prelude::*;
+    use huff_ast::*;
+
+    fn emits_analysis_error<'defs: 'src, 'src, const M: usize, const N: usize>(
+        defs: [&'defs Definition<'src>; M],
+        entry_point: &'defs Macro<'src>,
+        errors: [AnalysisError<'_, 'src>; N],
+    ) {
+        let mut emitted = Vec::with_capacity(N);
+        analyze_entry_point(&build_ident_map(defs.into_iter()), entry_point, |err| {
+            emitted.push(err.clone())
+        });
+        assert_eq!(errors.to_vec(), emitted, "expected == emitted");
+    }
+
+    #[test]
+    fn duplicate_macro_definition() {
+        let span = SimpleSpan::new(0, 0);
+        let d1 = Definition::Macro(Macro {
+            name: ("Thing", span),
+            args: Box::new([]),
+            takes_returns: None,
+            body: Box::new([]),
+        });
+        let d2 = Definition::Macro(Macro {
+            name: ("Thing", span),
+            args: Box::new([("wow", span)]),
+            takes_returns: None,
+            body: Box::new(
+                [MacroStatement::Instruction(Instruction::MacroArgReference(("wow", span)))],
+            ),
+        });
+
+        let mut emitted = vec![];
+        let map = analyze_global_for_dups(&build_ident_map([&d1, &d2].into_iter()), |err| {
+            emitted.push(err)
+        });
+        assert_eq!(
+            emitted,
+            vec![AnalysisError::DefinitionNameCollision {
+                collided: Box::new([&d1, &d2]),
+                duplicate_name: "Thing"
+            }]
+        );
+        assert_eq!(map, BTreeMap::new());
+    }
+
+    #[test]
+    fn more_than_two_deplicate_defs() {
+        let span = SimpleSpan::new(0, 0);
+        let d1 = Definition::Macro(Macro {
+            name: ("TheWhat", span),
+            args: Box::new([]),
+            takes_returns: None,
+            body: Box::new([]),
+        });
+        let d2 = Definition::Constant {
+            name: ("TheWhat", span),
+            expr: (ConstExpr::FreeStoragePointer, span),
+        };
+
+        let unrelated_table = Definition::Table {
+            name: ("awesome_stuff", span),
+            data: Box::new([0x00, 0x01]),
+        };
+        let d3 = Definition::Macro(Macro {
+            name: ("TheWhat", span),
+            args: Box::new([("nice", span)]),
+            takes_returns: None,
+            body: Box::new([]),
+        });
+
+        let mut emitted = vec![];
+        let map = analyze_global_for_dups(
+            &build_ident_map([&d1, &d2, &unrelated_table, &d3].into_iter()),
+            |err| emitted.push(err),
+        );
+        assert_eq!(
+            emitted,
+            vec![AnalysisError::DefinitionNameCollision {
+                collided: Box::new([&d1, &d2, &d3]),
+                duplicate_name: "TheWhat"
+            }]
+        );
+        assert_eq!(map, BTreeMap::from([("awesome_stuff", &unrelated_table)]));
+    }
+
+    #[test]
+    fn simple_recursive_macro_invoke() {
+        let span = SimpleSpan::new(0, 0);
+        let invoke = Invoke::Macro {
+            name: ("TheRizzler", span),
+            args: Box::new([]),
+        };
+        let inner_macro = Macro {
+            name: ("TheRizzler", span),
+            args: Box::new([]),
+            takes_returns: None,
+            body: Box::new([MacroStatement::Invoke(invoke.clone())]),
+        };
+        let m = Definition::Macro(inner_macro.clone());
+        emits_analysis_error(
+            [&m],
+            &inner_macro,
+            [AnalysisError::RecursiveMacroInvocation {
+                invocation_chain: Box::new([(&inner_macro, &invoke)]),
+            }],
+        );
+    }
+
+    #[test]
+    fn deep_recursive_macro_invoke() {
+        let span = SimpleSpan::new(0, 0);
+
+        let invoke1 = Invoke::Macro {
+            name: ("Top", span),
+            args: Box::new([]),
+        };
+        let inner_m1 = Macro {
+            name: ("VeryTop", span),
+            args: Box::new([]),
+            takes_returns: None,
+            body: Box::new([MacroStatement::Invoke(invoke1.clone())]),
+        };
+        let m1 = Definition::Macro(inner_m1.clone());
+
+        let invoke2 = Invoke::Macro {
+            name: ("Lower", span),
+            args: Box::new([]),
+        };
+        let inner_m2 = Macro {
+            name: ("Top", span),
+            args: Box::new([]),
+            takes_returns: None,
+            body: Box::new([MacroStatement::Invoke(invoke2.clone())]),
+        };
+        let m2 = Definition::Macro(inner_m2.clone());
+
+        let invoke3 = Invoke::Macro {
+            name: ("VeryTop", span),
+            args: Box::new([]),
+        };
+        let inner_m3 = Macro {
+            name: ("Lower", span),
+            args: Box::new([]),
+            takes_returns: None,
+            body: Box::new([MacroStatement::Invoke(invoke3.clone())]),
+        };
+        let m3 = Definition::Macro(inner_m3.clone());
+
+        emits_analysis_error(
+            [&m1, &m2, &m3],
+            &inner_m1,
+            [AnalysisError::RecursiveMacroInvocation {
+                invocation_chain: Box::new([
+                    (&inner_m1, &invoke1),
+                    (&inner_m2, &invoke2),
+                    (&inner_m3, &invoke3),
+                ]),
+            }],
+        );
+    }
+
+    #[test]
+    fn macro_not_found() {
+        let span = SimpleSpan::new(0, 0);
+        let invoke_span = SimpleSpan::new(3, 12);
+
+        let invoke = Invoke::Macro {
+            name: ("MY_FUNC", invoke_span),
+            args: Box::new([]),
+        };
+        let inner_macro = Macro {
+            name: ("MAIN", span),
+            args: Box::new([]),
+            takes_returns: None,
+            body: Box::new([MacroStatement::Invoke(invoke.clone())]),
+        };
+        let m = Definition::Macro(inner_macro.clone());
+
+        emits_analysis_error(
+            [&m],
+            &inner_macro,
+            [AnalysisError::DefinitionNotFound {
+                scope: &inner_macro,
+                def_type: "macro",
+                name: &("MY_FUNC", invoke_span),
+            }],
+        );
+    }
+
+    #[test]
+    fn nested_label_ref_valid() {
+        let span = SimpleSpan::new(0, 0);
+
+        let im1 = Macro {
+            name: ("MAIN", span),
+            args: Box::new([]),
+            takes_returns: None,
+            body: Box::new([
+                MacroStatement::LabelDefinition(("wow", span)),
+                MacroStatement::Invoke(Invoke::Macro {
+                    name: ("OTHER", span),
+                    args: Box::new([]),
+                }),
+            ]),
+        };
+        let m1 = Definition::Macro(im1.clone());
+
+        let im2 = Macro {
+            name: ("OTHER", span),
+            args: Box::new([]),
+            takes_returns: None,
+            body: Box::new([MacroStatement::Instruction(Instruction::LabelReference((
+                "wow", span,
+            )))]),
+        };
+        let m2 = Definition::Macro(im2.clone());
+
+        emits_analysis_error([&m1, &m2], &im1, []);
+    }
 }
