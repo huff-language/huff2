@@ -52,3 +52,9 @@ impl<'a> LabelStack<'a, ()> {
         self.insert(label, ());
     }
 }
+
+impl<'a, V> Default for LabelStack<'a, V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}

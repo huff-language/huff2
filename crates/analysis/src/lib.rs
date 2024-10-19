@@ -33,7 +33,7 @@ pub fn analyze_entry_point<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)
 ) {
     let mut analyzed_macros: BTreeSet<&str> = BTreeSet::new();
     let mut invoke_stack: Vec<(&'ast Macro<'src>, &'ast Invoke<'src>)> = Vec::with_capacity(32);
-    let mut label_stack: LabelStack<'src, ()> = LabelStack::new();
+    let mut label_stack = LabelStack::default();
 
     analyze_macro(
         global_defs,
@@ -147,14 +147,20 @@ fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
     m.body.iter().for_each(|stmt| match stmt {
         MacroStatement::LabelDefinition(_) => {}
         MacroStatement::Instruction(instruction) => {
-            analyze_instruction(instruction, label_stack).map(|err| emit_error(err));
+            if let Some(err) = analyze_instruction(instruction, label_stack) {
+                emit_error(err);
+            }
         }
         MacroStatement::Invoke(invoke) => match invoke {
             Invoke::Macro { name, args } => {
                 // Check the arguments in the invocatino.
                 args.iter()
                     .filter_map(|arg| analyze_instruction(arg, label_stack))
-                    .for_each(|err| emit_error(err));
+                    .for_each(
+                        // Not actually redundant so making clippy stfu here.
+                        #[allow(clippy::redundant_closure)]
+                        |err| emit_error(err),
+                    );
                 // Emit error if we don't find at least 1 macro by the given name.
                 if !global_exists!(global_defs, name.ident(), Definition::Macro(_)) {
                     emit_error(AnalysisError::DefinitionNotFound {
