@@ -27,6 +27,7 @@ pub enum Token<'src> {
     Dec(&'src str),
     Hex(&'src str),
     Bin(&'src str),
+    String(&'src str),
 
     Error(char),
 }
@@ -39,7 +40,8 @@ impl fmt::Display for Token<'_> {
             | Token::Ident(s)
             | Token::Dec(s)
             | Token::Hex(s)
-            | Token::Bin(s) => write!(f, "{}", s),
+            | Token::Bin(s)
+            | Token::String(s) => write!(f, "{}", s),
             Token::Punct(c) | Token::Error(c) => write!(f, "{}", c),
         }
     }
@@ -47,27 +49,48 @@ impl fmt::Display for Token<'_> {
 
 fn lexer<'src>(
 ) -> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char>>> {
+    let validate_end = any()
+        .or_not()
+        .rewind()
+        .validate(|c: Option<char>, e, emitter| {
+            if let Some(c) = c {
+                if !(c.is_whitespace() || "(){[]<>:=,/}".contains(c)) {
+                    emitter.emit(Rich::custom(e.span(), "invalid token"));
+                }
+            }
+        });
     let keyword = just("#")
-        .ignore_then(keyword("define").or(keyword("include")))
+        .ignore_then(choice((keyword("define"), keyword("include"))))
+        .then_ignore(validate_end)
         .map(Token::Keyword);
 
-    let ident = text::ident().map(Token::Ident);
+    let ident = text::ident().then_ignore(validate_end).map(Token::Ident);
 
     let punct = one_of("(){}[]<>:=,").map(Token::Punct);
 
     let hex = just("0x")
         .ignore_then(text::digits(16))
         .to_slice()
+        .then_ignore(validate_end)
         .map(Token::Hex);
 
     let bin = just("0b")
         .ignore_then(text::digits(2))
+        .then_ignore(validate_end)
         .to_slice()
         .map(Token::Bin);
 
-    let dec = text::digits(10).to_slice().map(Token::Dec);
+    let dec = text::digits(10)
+        .then_ignore(validate_end)
+        .to_slice()
+        .map(Token::Dec);
 
-    let token = choice((keyword, ident, punct, hex, bin, dec));
+    let string = just("\"")
+        .ignore_then(any().and_is(just("\"").not()).repeated().to_slice())
+        .then_ignore(just("\""))
+        .map(Token::String);
+
+    let token = choice((keyword, ident, punct, hex, bin, dec, string));
 
     // comments
     let single_line_comment = just("//")
@@ -102,11 +125,11 @@ mod tests {
         };
     }
 
-    // macro_rules! assert_err {
-    //     ($input:expr, $expected:expr) => {
-    //         assert_eq!(lexer().parse($input).into_result(), Err(vec![$expected]),);
-    //     };
-    // }
+    macro_rules! assert_err {
+        ($input:expr, $expected:expr) => {
+            assert_eq!(lexer().parse($input).into_result(), Err(vec![$expected]),);
+        };
+    }
 
     #[test]
     fn lex_keyword() {
@@ -125,10 +148,10 @@ mod tests {
             (Token::Ident("foo"), SimpleSpan::new(0, 3)),
             (Token::Ident("bar"), SimpleSpan::new(4, 7))
         );
-        // assert_err!(
-        //     "foo#define",
-        //     Rich::custom(SimpleSpan::new(0, 10), "invalid token")
-        // );
+        assert_err!(
+            "foo#define",
+            Rich::custom(SimpleSpan::new(3, 3), "invalid token")
+        );
     }
 
     #[test]
@@ -155,7 +178,7 @@ mod tests {
     fn lex_hex() {
         assert_ok!("0x0", (Token::Hex("0x0"), SimpleSpan::new(0, 3)));
         assert_ok!("0x123", (Token::Hex("0x123"), SimpleSpan::new(0, 5)));
-        // assert_err!("0x", SimpleSpan::new(2, 2));
+        assert_err!("0x0x", Rich::custom(SimpleSpan::new(3, 3), "invalid token"));
     }
 
     #[test]
@@ -168,5 +191,15 @@ mod tests {
     fn lex_bin() {
         assert_ok!("0b101", (Token::Bin("0b101"), SimpleSpan::new(0, 5)));
         assert_ok!("0b0", (Token::Bin("0b0"), SimpleSpan::new(0, 3)));
+    }
+
+    #[test]
+    fn lex_string() {
+        assert_ok!("\"\"", (Token::String(""), SimpleSpan::new(0, 2)));
+        assert_ok!("\"foo\"", (Token::String("foo"), SimpleSpan::new(0, 5)));
+        assert_ok!(
+            "\"foo bar\"",
+            (Token::String("foo bar"), SimpleSpan::new(0, 9))
+        );
     }
 }
