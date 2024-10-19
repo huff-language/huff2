@@ -158,9 +158,7 @@ fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
                 #[allow(clippy::redundant_closure)]
                 args.iter()
                     .filter_map(|arg| analyze_instruction(arg, label_stack))
-                    .for_each(
-                        |err| emit_error(err),
-                    );
+                    .for_each(|err| emit_error(err));
                 // Emit error if we don't find at least 1 macro by the given name.
                 if !global_exists!(global_defs, name.ident(), Definition::Macro(_)) {
                     emit_error(AnalysisError::DefinitionNotFound {
