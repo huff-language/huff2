@@ -956,9 +956,21 @@ version = "0.0.1"
 dependencies = [
  "ariadne",
  "clap",
+ "evm-glue",
+ "hex",
  "huff-analysis",
  "huff-ast",
+ "huff-compilation",
  "thiserror",
+]
+
+[[package]]
+name = "huff-compilation"
+version = "0.0.1"
+dependencies = [
+ "evm-glue",
+ "huff-analysis",
+ "huff-ast",
 ]
 
 [[package]]

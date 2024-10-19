@@ -35,6 +35,14 @@ pub fn analyze_entry_point<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)
     let mut invoke_stack: Vec<(&'ast Macro<'src>, &'ast Invoke<'src>)> = Vec::with_capacity(32);
     let mut label_stack = LabelStack::default();
 
+    if entry_point.args.len() != 0 {
+        emit_error(AnalysisError::MacroArgumentCountMismatch {
+            scope: None,
+            args: &[],
+            target: entry_point,
+        });
+    }
+
     analyze_macro(
         global_defs,
         entry_point,
@@ -185,7 +193,7 @@ fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
                     .for_each(|macro_being_invoked| {
                         if macro_being_invoked.args.len() != args.len() {
                             emit_error(AnalysisError::MacroArgumentCountMismatch {
-                                scope: m,
+                                scope: Some(m),
                                 args,
                                 target: macro_being_invoked,
                             });

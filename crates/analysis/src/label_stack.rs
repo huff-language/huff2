@@ -28,7 +28,7 @@ impl<'a, V> LabelStack<'a, V> {
         self.label_stack.push((label, value));
     }
 
-    pub fn get(&mut self, target_label: &'a str) -> Option<&V> {
+    pub fn get(&self, target_label: &'a str) -> Option<&V> {
         self.label_stack
             .iter()
             .rev()
