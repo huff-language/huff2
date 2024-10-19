@@ -1,6 +1,8 @@
 pub mod errors;
+pub mod label_stack;
 
 use crate::errors::AnalysisError;
+use crate::label_stack::LabelStack;
 use huff_ast::{Definition, IdentifiableNode, Instruction, Invoke, Macro, MacroStatement};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -8,15 +10,16 @@ pub fn analyze<
     'src,
     'ast: 'src,
     I: Iterator<Item = &'ast Definition<'src>>,
-    E: FnMut(AnalysisError<'ast, 'src>) + Copy,
+    E: FnMut(AnalysisError<'ast, 'src>),
 >(
     defs: I,
     mut emit_error: E,
-) -> Option<BTreeMap<&'src str, &'ast Definition<'src>>> {
+) -> BTreeMap<&'src str, &'ast Definition<'src>> {
     let global_defs = build_ident_map(defs);
 
     let mut analyzed_macros: BTreeSet<&str> = BTreeSet::new();
     let mut invoke_stack: Vec<(&'ast Macro<'src>, &'ast Invoke<'src>)> = Vec::with_capacity(32);
+    let mut label_stack: LabelStack<'src, ()> = LabelStack::new();
 
     global_defs.iter().for_each(|(_, defs)| {
         defs.iter()
@@ -31,9 +34,10 @@ pub fn analyze<
                 analyze_macro(
                     &global_defs,
                     m,
+                    &mut label_stack,
                     &mut invoke_stack,
                     &mut analyzed_macros,
-                    emit_error,
+                    &mut emit_error,
                 );
                 analyzed_macros.insert(m.ident());
             })
@@ -41,21 +45,18 @@ pub fn analyze<
 
     global_defs
         .into_iter()
-        .try_fold(BTreeMap::new(), |mut unique, (name, found_defs)| {
-            let (name, def) = match found_defs.as_slice() {
-                &[sole_def] => Some((name, sole_def)),
-                [] => None,
-                many_defs => {
-                    emit_error(AnalysisError::DefinitionNameCollision {
-                        collided: many_defs.to_vec().into_boxed_slice(),
-                        duplicate_name: name,
-                    });
-                    None
-                }
-            }?;
-            unique.insert(name, def);
-            Some(unique)
+        .filter_map(|(name, found_defs)| match found_defs.as_slice() {
+            &[sole_def] => Some((name, sole_def)),
+            [] => None,
+            many_defs => {
+                emit_error(AnalysisError::DefinitionNameCollision {
+                    collided: many_defs.to_vec().into_boxed_slice(),
+                    duplicate_name: name,
+                });
+                None
+            }
         })
+        .collect()
 }
 
 macro_rules! global_exists {
@@ -72,12 +73,13 @@ macro_rules! global_exists {
     };
 }
 
-fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>) + Copy>(
+fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
     global_defs: &BTreeMap<&'src str, Vec<&'ast Definition<'src>>>,
     m: &'ast Macro<'src>,
+    label_stack: &mut LabelStack<'src, ()>,
     invoke_stack: &mut Vec<(&'ast Macro<'src>, &'ast Invoke<'src>)>,
     validated_macros: &mut BTreeSet<&'src str>,
-    mut emit_error: E,
+    emit_error: &mut E,
 ) {
     let name = m.name.0;
 
@@ -97,7 +99,10 @@ fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>) + Copy>(
     }
 
     let labels = build_ident_map(m.body.iter().filter_map(|stmt| match stmt {
-        MacroStatement::LabelDefinition(label_name) => Some(label_name),
+        MacroStatement::LabelDefinition(label_name) => {
+            label_stack.add(label_name.ident());
+            Some(label_name)
+        }
         _ => None,
     }));
 
@@ -113,51 +118,54 @@ fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>) + Copy>(
     });
 
     // Validate instruction against the current scope.
-    let analyze_instruction = |instruction: &'ast Instruction| match instruction {
-        Instruction::Op(_) => None,
-        Instruction::LabelReference(label) => {
-            if !in_ident_map(&labels, label.ident()) {
-                Some(AnalysisError::ReferenceNotFound {
-                    scope: m,
-                    not_found: instruction,
-                })
-            } else {
-                None
+    let analyze_instruction =
+        |instruction: &'ast Instruction, label_stack: &mut LabelStack<'src, ()>| match instruction {
+            Instruction::Op(_) => None,
+            Instruction::LabelReference(label) => {
+                if !label_stack.contains(label.ident()) {
+                    Some(AnalysisError::ReferenceNotFound {
+                        scope: m,
+                        not_found: instruction,
+                    })
+                } else {
+                    None
+                }
             }
-        }
-        Instruction::MacroArgReference(arg) => {
-            if !in_ident_map(&macro_args, arg.ident()) {
-                Some(AnalysisError::ReferenceNotFound {
-                    scope: m,
-                    not_found: instruction,
-                })
-            } else {
-                None
+            Instruction::MacroArgReference(arg) => {
+                if !in_ident_map(&macro_args, arg.ident()) {
+                    Some(AnalysisError::ReferenceNotFound {
+                        scope: m,
+                        not_found: instruction,
+                    })
+                } else {
+                    None
+                }
             }
-        }
-        Instruction::ConstantReference(const_ref) => {
-            if !global_exists!(global_defs, const_ref.ident(), Definition::Constant { .. }) {
-                Some(AnalysisError::ReferenceNotFound {
-                    scope: m,
-                    not_found: instruction,
-                })
-            } else {
-                None
+            Instruction::ConstantReference(const_ref) => {
+                if !global_exists!(global_defs, const_ref.ident(), Definition::Constant { .. }) {
+                    Some(AnalysisError::ReferenceNotFound {
+                        scope: m,
+                        not_found: instruction,
+                    })
+                } else {
+                    None
+                }
             }
-        }
-    };
+        };
+
+    label_stack.enter_context();
 
     m.body.iter().for_each(|stmt| match stmt {
         MacroStatement::LabelDefinition(_) => {}
         MacroStatement::Instruction(instruction) => {
-            analyze_instruction(instruction).map(emit_error);
+            analyze_instruction(instruction, label_stack).map(|err| emit_error(err));
         }
         MacroStatement::Invoke(invoke) => match invoke {
             Invoke::Macro { name, args } => {
                 // Check the arguments in the invocatino.
                 args.iter()
-                    .filter_map(analyze_instruction)
-                    .for_each(emit_error);
+                    .filter_map(|arg| analyze_instruction(arg, label_stack))
+                    .for_each(|err| emit_error(err));
                 // Emit error if we don't find at least 1 macro by the given name.
                 if !global_exists!(global_defs, name.ident(), Definition::Macro(_)) {
                     emit_error(AnalysisError::MacroNotFound { scope: m, name });
@@ -188,6 +196,7 @@ fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>) + Copy>(
                         analyze_macro(
                             global_defs,
                             macro_being_invoked,
+                            label_stack,
                             invoke_stack,
                             validated_macros,
                             emit_error,
@@ -200,6 +209,8 @@ fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>) + Copy>(
             _ => todo!(),
         },
     });
+
+    label_stack.leave_context();
 }
 
 fn build_ident_map<'ast, 'src, N: IdentifiableNode<'src>, I: Iterator<Item = &'ast N>>(
