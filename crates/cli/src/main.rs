@@ -1,36 +1,51 @@
-use argh::FromArgs;
 use ariadne::{sources, Color, Config, IndexType, Label, Report, ReportKind};
-use huff_ast::parse;
-use std::{fs::read_to_string, io, process::exit};
+use clap::Parser as ClapParser;
+use huff_analysis::*;
+use huff_ast::{parse, RootSection};
 use thiserror::Error;
 
-fn main() {
-    let cli: Cli = argh::from_env();
-    let res = match cli.command {
-        Commands::Build(cmd) => build(cmd),
-    };
-    if let Err(e) = res {
-        eprintln!("error: {}", e);
-        exit(1);
-    }
+/// Huff Language Compiler
+#[derive(ClapParser)]
+struct Cli {
+    /// filename
+    #[clap(help = "Root huff file to compile")]
+    filename: String,
+
+    #[clap(
+        short = 'm',
+        long = "alt-main",
+        default_value = "MAIN",
+        help = "alternative entry point for runtime execution"
+    )]
+    main: String,
+    #[clap(
+        short = 't',
+        long = "alt-constructor",
+        default_value = "CONSTRUCTOR",
+        help = "entry point for constructor (initcode) execution"
+    )]
+    constructor: String,
 }
 
 #[derive(Error, Debug)]
 enum HuffError {
     /// Wrapper around `io::Error`
     #[error("{0}")]
-    Io(#[from] io::Error),
+    Io(#[from] std::io::Error),
     // #[error("{0}")]
     // Parser(Report),
     // Parser(#[from] ParseError<usize, Token<'src>, huff_ast::Error>),
 }
 type HuffResult = Result<(), HuffError>;
 
-fn build(cmd: BuildCommand) -> HuffResult {
-    let src = read_to_string(&cmd.filename)?;
-    let filename: String = cmd.filename;
-    match parse(&src) {
-        Ok(ast) => println!("{:?}", ast),
+fn main() -> HuffResult {
+    let cli = Cli::parse();
+
+    let src = std::fs::read_to_string(&cli.filename)?;
+    let filename: String = cli.filename;
+
+    let ast = match parse(&src) {
+        Ok(ast) => ast,
         Err(errs) => {
             errs.into_iter().for_each(|e| {
                 Report::build(ReportKind::Error, filename.clone(), e.span().start)
@@ -45,30 +60,17 @@ fn build(cmd: BuildCommand) -> HuffResult {
                     .print(sources([(filename.clone(), &src)]))
                     .unwrap()
             });
+
+            std::process::exit(1);
         }
-    }
+    };
+
+    let mut analysis_errors = Vec::with_capacity(5);
+    let global_defs = build_ident_map(ast.0.iter().map(|section| match section {
+        RootSection::Include(_) => todo!("Include not yet supported"),
+        RootSection::Definition(def) => def,
+    }));
+    let _unique_defs = analyze_global_for_dups(&global_defs, |err| analysis_errors.push(err));
 
     Ok(())
-}
-
-#[derive(FromArgs)]
-/// Huff Language Compiler
-struct Cli {
-    #[argh(subcommand)]
-    command: Commands,
-}
-
-#[derive(FromArgs)]
-#[argh(subcommand)]
-enum Commands {
-    Build(BuildCommand),
-}
-
-#[derive(FromArgs)]
-#[argh(subcommand, name = "build")]
-/// Build compiles a huff file.
-struct BuildCommand {
-    /// filename
-    #[argh(positional)]
-    filename: String,
 }
