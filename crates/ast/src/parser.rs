@@ -578,7 +578,7 @@ mod tests {
             vec![Ident("READ_ADDRESS"), Punct('('), Hex("0x4"), Punct(')')],
             ast::MacroStatement::Invoke(ast::Invoke::Macro {
                 name: ("READ_ADDRESS", span),
-                args: Box::new([ast::Instruction::Op((Opcode::PUSH1([0x04]), span))])
+                args: Box::new([ast::Instruction::VariablePush((uint!(4U256), span))])
             })
         );
     }
@@ -595,7 +595,7 @@ mod tests {
         assert_ok!(
             instruction(),
             vec![Hex("0x1")],
-            ast::Instruction::Op((Opcode::PUSH1([0x01]), span))
+            ast::Instruction::VariablePush((uint!(1U256), span))
         );
         assert_ok!(
             instruction(),
