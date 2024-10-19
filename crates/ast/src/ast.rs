@@ -67,7 +67,6 @@ pub enum ConstExpr {
     FreeStoragePointer,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MacroStatement<'src> {
     LabelDefinition(Spanned<&'src str>),
