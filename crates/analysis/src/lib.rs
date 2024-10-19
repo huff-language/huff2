@@ -106,7 +106,7 @@ fn analyze_macro<'ast: 'src, 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
     // Validate instruction against the current scope.
     let analyze_instruction =
         |instruction: &'ast Instruction, label_stack: &mut LabelStack<'src, ()>| match instruction {
-            Instruction::Op(_) => None,
+            Instruction::Op(_) | Instruction::VariablePush(_) => None,
             Instruction::LabelReference(label) => {
                 if !label_stack.contains(label.ident()) {
                     Some(AnalysisError::ReferenceNotFound {

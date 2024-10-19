@@ -77,6 +77,7 @@ pub enum MacroStatement<'src> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Instruction<'src> {
     Op(Spanned<Opcode>),
+    VariablePush(Spanned<U256>),
     LabelReference(Spanned<&'src str>),
     MacroArgReference(Spanned<&'src str>),
     ConstantReference(Spanned<&'src str>),

@@ -124,7 +124,7 @@ fn macro_statement<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::
 }
 
 fn instruction<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Instruction<'src>> {
-    let push_auto = word().map(|(value, span)| (ast::Instruction::Op((u256_as_push(value), span))));
+    let push_auto = word().map(|(value, span)| (ast::Instruction::VariablePush((value, span))));
 
     let push = select! {
         Ident("push1") => 1,
