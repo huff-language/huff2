@@ -44,13 +44,14 @@ fn generate_for_macro<'ast, 'src>(
             .map(|name| name.ident())
             .zip(arg_values),
     );
+
+    label_stack.enter_context();
+
     current.body.iter().for_each(|stmt| {
         if let MacroStatement::LabelDefinition(name) = stmt {
             label_stack.push(name.ident(), mark_tracker.next_mark());
         }
     });
-
-    label_stack.enter_context();
 
     current.body.iter().for_each(|stmt| match stmt {
         MacroStatement::LabelDefinition(name) => {
