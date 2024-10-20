@@ -26,7 +26,7 @@ pub enum AnalysisError<'ast, 'src> {
     DefinitionNotFound {
         scope: &'ast Macro<'src>,
         def_type: &'static str,
-        name: &'ast Spanned<&'src str>,
+        not_found: &'ast Spanned<&'src str>,
     },
     MacroArgumentCountMismatch {
         scope: Option<&'ast Macro<'src>>,
@@ -82,6 +82,10 @@ impl AnalysisError<'_, '_> {
             AnalysisError::EntryPointNotFound { name } => {
                 Report::build(ReportKind::Error, filename.clone(), 0)
                     .with_message(format!("Entry point '{}' not found", name.fg(Color::Red)))
+                    .with_help(format!(
+                        "Define the '{}' entry point or pick an alternative one via the {}",
+                        name, "--alt-main/--alt-constructor CLI flags"
+                    ))
                     .finish()
             }
             AnalysisError::RecursiveMacroInvocation { invocation_chain } => {
@@ -159,8 +163,27 @@ impl AnalysisError<'_, '_> {
                                 not_found.0.fg(Color::Red)
                             )),
                     )
+                    .with_help(
+                        "Ensure the argument exists and is correct (names are case-sensitive)",
+                    )
                     .finish()
             }
+            AnalysisError::DefinitionNotFound {
+                scope,
+                def_type,
+                not_found,
+            } => Report::build(ReportKind::Error, filename.clone(), not_found.1.start)
+                .with_config(Config::default().with_index_type(IndexType::Byte))
+                .with_message(format!(
+                    "Definition of {} '{}' not found in macro {}",
+                    def_type.fg(Color::Cyan),
+                    not_found.0.fg(Color::Red),
+                    scope.ident().fg(Color::Blue)
+                ))
+                .with_label(
+                    Label::new((filename.clone(), not_found.1.into_range())).with_color(Color::Red),
+                )
+                .finish(),
             _ => Report::build(ReportKind::Error, filename.clone(), 0)
                 .with_message(format!("Error with unimplemented formatting: {:?}", self))
                 .finish(),

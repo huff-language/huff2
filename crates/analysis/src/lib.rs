@@ -171,7 +171,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                         self.emit(AnalysisError::DefinitionNotFound {
                             scope: self.m,
                             def_type: "macro",
-                            name,
+                            not_found: name,
                         });
                     }
                     self.invoke_stack.push((self.m, name));
@@ -221,7 +221,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                         self.emit(AnalysisError::DefinitionNotFound {
                             scope: self.m,
                             def_type: "table",
-                            name: table_ref,
+                            not_found: table_ref,
                         })
                     }
                 }
@@ -230,7 +230,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                         self.emit(AnalysisError::DefinitionNotFound {
                             scope: self.m,
                             def_type: "macro",
-                            name: code_ref,
+                            not_found: code_ref,
                         })
                     }
                     if self
@@ -259,7 +259,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                         self.emit(AnalysisError::DefinitionNotFound {
                             scope: self.m,
                             def_type: "solidity function / error",
-                            name: func_or_error_ref,
+                            not_found: func_or_error_ref,
                         })
                     }
                 }
@@ -269,7 +269,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                         self.emit(AnalysisError::DefinitionNotFound {
                             scope: self.m,
                             def_type: "solidity event",
-                            name: event_ref,
+                            not_found: event_ref,
                         })
                     }
                 }
@@ -311,7 +311,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                     self.emit(AnalysisError::DefinitionNotFound {
                         scope: self.m,
                         def_type: "constant",
-                        name: const_ref,
+                        not_found: const_ref,
                     });
                 }
             }
@@ -532,7 +532,7 @@ mod test {
             [AnalysisError::DefinitionNotFound {
                 scope: &inner_macro,
                 def_type: "macro",
-                name: &("MY_FUNC", invoke_span),
+                not_found: &("MY_FUNC", invoke_span),
             }],
         );
     }
