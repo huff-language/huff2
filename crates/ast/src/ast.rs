@@ -30,19 +30,27 @@ pub enum Definition<'src> {
 }
 
 pub trait IdentifiableNode<'a> {
-    fn ident(&self) -> &'a str;
+    fn spanned(&self) -> &Spanned<&'a str>;
+
+    fn ident(&self) -> &'a str {
+        self.spanned().0
+    }
+
+    fn span(&self) -> Span {
+        self.spanned().1
+    }
 }
 
 impl<'src> IdentifiableNode<'src> for Definition<'src> {
-    fn ident(&self) -> &'src str {
+    fn spanned(&self) -> &Spanned<&'src str> {
         match self {
-            Self::Macro(m) => m.name.0,
-            Self::Constant { name, .. } => name.0,
-            Self::Jumptable(jt) => jt.name.0,
-            Self::Table { name, .. } => name.0,
-            Self::SolEvent(e) => e.name.0,
-            Self::SolError(e) => e.name.0,
-            Self::SolFunction(f) => f.name.0,
+            Self::Macro(m) => &m.name,
+            Self::Constant { name, .. } => name,
+            Self::Jumptable(jt) => &jt.name,
+            Self::Table { name, .. } => name,
+            Self::SolEvent(e) => &e.name,
+            Self::SolError(e) => &e.name,
+            Self::SolFunction(f) => &f.name,
         }
     }
 }
@@ -50,14 +58,14 @@ impl<'src> IdentifiableNode<'src> for Definition<'src> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Macro<'src> {
     pub name: Spanned<&'src str>,
-    pub args: Box<[Spanned<&'src str>]>,
+    pub args: Spanned<Box<[Spanned<&'src str>]>>,
     pub takes_returns: Option<(Spanned<usize>, Spanned<usize>)>,
     pub body: Box<[MacroStatement<'src>]>,
 }
 
 impl<'src> IdentifiableNode<'src> for Macro<'src> {
-    fn ident(&self) -> &'src str {
-        self.name.ident()
+    fn spanned(&self) -> &Spanned<&'src str> {
+        &self.name
     }
 }
 
@@ -81,6 +89,18 @@ pub enum Instruction<'src> {
     LabelReference(Spanned<&'src str>),
     MacroArgReference(Spanned<&'src str>),
     ConstantReference(Spanned<&'src str>),
+}
+
+impl Instruction<'_> {
+    pub fn get_span(&self) -> Span {
+        match self {
+            Self::Op(s) => s.1,
+            Self::VariablePush(s) => s.1,
+            Self::LabelReference(name)
+            | Self::MacroArgReference(name)
+            | Self::ConstantReference(name) => name.1,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -131,7 +151,7 @@ pub type Span = SimpleSpan<usize>;
 pub type Spanned<T> = (T, Span);
 
 impl<'src> IdentifiableNode<'src> for Spanned<&'src str> {
-    fn ident(&self) -> &'src str {
-        self.0
+    fn spanned(&self) -> &Spanned<&'src str> {
+        self
     }
 }

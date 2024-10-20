@@ -1,0 +1,6 @@
+#define macro TEST1() = takes(0) returns(0) { } // ✨
+
+#define macro TEST1(a, b) = takes(0) returns(0) {
+    0x0 0x1 stop
+    <a>
+}

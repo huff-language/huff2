@@ -88,7 +88,11 @@ fn r#macro<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definiti
 
     just(Ident("macro"))
         .ignore_then(ident())
-        .then(macro_args.delimited_by(punct('('), punct(')')))
+        .then(
+            macro_args
+                .delimited_by(punct('('), punct(')'))
+                .map_with(|args, ex| (args.into_boxed_slice(), ex.span())),
+        )
         .then_ignore(punct('='))
         .then(
             just(Ident("takes"))
@@ -105,7 +109,7 @@ fn r#macro<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definiti
         )
         .map(|(((name, args), takes_returns), body)| ast::Macro {
             name,
-            args: args.into_boxed_slice(),
+            args,
             takes_returns,
             body: body.into_boxed_slice(),
         })
@@ -521,7 +525,7 @@ mod tests {
             ],
             ast::Definition::Macro(ast::Macro {
                 name: ("MAIN", span),
-                args: Box::new([]),
+                args: (Box::new([]), span),
                 takes_returns: None,
                 body: Box::new([])
             })
@@ -549,7 +553,7 @@ mod tests {
             ],
             ast::Definition::Macro(ast::Macro {
                 name: ("READ_ADDRESS", span),
-                args: Box::new([("offset", span)]),
+                args: (Box::new([("offset", span)]), span),
                 takes_returns: Some(((0, span), (1, span))),
                 body: Box::new([ast::MacroStatement::Instruction(ast::Instruction::Op((
                     Opcode::STOP,
