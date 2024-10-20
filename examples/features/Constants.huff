@@ -1,0 +1,12 @@
+#define constant ONE = 0x1
+#define constant ZERO = 0x0
+
+#define macro MAIN() = takes(0) returns(0) {
+    [ONE]
+    WOW([ZERO])
+}
+
+#define macro WOW(a) = takes(0) returns(0) {
+    <a>
+    stop
+}

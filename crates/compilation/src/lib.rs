@@ -1,40 +1,36 @@
+use alloy_primitives::U256;
 use evm_glue::{assembly::Asm, opcodes::Opcode, utils::MarkTracker};
 use huff_analysis::label_stack::LabelStack;
-use huff_ast::{
-    u256_as_push, Definition, IdentifiableNode, Instruction, Invoke, Macro, MacroStatement,
-};
+use huff_ast::*;
 use std::collections::BTreeMap;
 
-pub fn generate_for_entrypoint<'ast>(
-    global_defs: &BTreeMap<&str, &Definition<'ast>>,
-    entry_point: &'ast Macro,
-    mark_tracker: &'ast mut MarkTracker,
-    config: &CompileConfig,
+pub fn generate_for_entrypoint<'src>(
+    globals: &CompileGlobals<'src, '_>,
+    entry_point: &Macro<'src>,
+    mark_tracker: &mut MarkTracker,
 ) -> Result<Vec<Asm>, String> {
     let mut label_stack: LabelStack<usize> = LabelStack::default();
     let mut asm = Vec::with_capacity(10_000);
 
     generate_for_macro(
-        global_defs,
+        globals,
         entry_point,
         Box::new([]),
         mark_tracker,
         &mut label_stack,
         &mut asm,
-        config,
     )?;
 
     Ok(asm)
 }
 
-fn generate_for_macro<'ast, 'src>(
-    global_defs: &BTreeMap<&str, &'ast Definition<'src>>,
-    current: &'ast Macro<'src>,
+fn generate_for_macro<'src: 'cmp, 'cmp>(
+    globals: &CompileGlobals<'src, '_>,
+    current: &Macro<'src>,
     arg_values: Box<[Asm]>,
-    mark_tracker: &'ast mut MarkTracker,
-    label_stack: &'ast mut LabelStack<'src, usize>,
+    mark_tracker: &mut MarkTracker,
+    label_stack: &'cmp mut LabelStack<'src, usize>,
     asm: &mut Vec<Asm>,
-    config: &CompileConfig,
 ) -> Result<(), String> {
     let current_args: BTreeMap<&str, Asm> = BTreeMap::from_iter(
         current
@@ -63,23 +59,23 @@ fn generate_for_macro<'ast, 'src>(
             }
             MacroStatement::Invoke(invoke) => match invoke {
                 Invoke::Macro { name, args } => {
-                    let target =
-                        if let Definition::Macro(target) = global_defs.get(name.ident()).unwrap() {
-                            target
-                        } else {
-                            panic!("Target should've been validated to be macro")
-                        };
+                    let target = if let Definition::Macro(target) =
+                        globals.defs.get(name.ident()).unwrap()
+                    {
+                        target
+                    } else {
+                        panic!("Target should've been validated to be macro")
+                    };
                     generate_for_macro(
-                        global_defs,
+                        globals,
                         target,
                         args.0
                             .iter()
-                            .map(|arg| instruction_to_asm(&current_args, label_stack, config, arg))
+                            .map(|arg| instruction_to_asm(globals, &current_args, label_stack, arg))
                             .collect::<Result<_, String>>()?,
                         mark_tracker,
                         label_stack,
                         asm,
-                        config,
                     )?;
                 }
                 _ => Err(format!(
@@ -88,7 +84,7 @@ fn generate_for_macro<'ast, 'src>(
                 ))?,
             },
             MacroStatement::Instruction(i) => {
-                asm.push(instruction_to_asm(&current_args, label_stack, config, i)?)
+                asm.push(instruction_to_asm(globals, &current_args, label_stack, i)?)
             }
         };
         Result::<(), String>::Ok(())
@@ -100,30 +96,55 @@ fn generate_for_macro<'ast, 'src>(
 }
 
 fn instruction_to_asm(
+    globals: &CompileGlobals,
     args: &BTreeMap<&str, Asm>,
     label_stack: &LabelStack<usize>,
-    config: &CompileConfig,
     i: &Instruction,
 ) -> Result<Asm, String> {
     match i {
         Instruction::Op((op, _)) => Ok(Asm::Op(*op)),
-        Instruction::VariablePush((value, _)) => {
-            if value.byte_len() == 0 && config.allow_push0 {
-                Ok(Asm::Op(Opcode::PUSH0))
-            } else {
-                Ok(Asm::Op(u256_as_push(*value)))
-            }
-        }
+        Instruction::VariablePush((value, _)) => Ok(u256_to_asm(*value, globals.allow_push0)),
         Instruction::LabelReference(name) => Ok(Asm::mref(*label_stack.get(name.ident()).unwrap())),
-        Instruction::ConstantReference(name) => Err(format!(
-            "Invalid reference to constant '{}' (not yet supported)",
-            name.0
+        Instruction::ConstantReference(name) => Ok(u256_to_asm(
+            *globals.constants.get(name.ident()).unwrap(),
+            globals.allow_push0,
         )),
         Instruction::MacroArgReference(name) => Ok(args.get(name.ident()).unwrap().clone()),
     }
 }
 
+fn u256_to_asm(value: U256, allow_push0: bool) -> Asm {
+    Asm::Op(if value.byte_len() == 0 && allow_push0 {
+        Opcode::PUSH0
+    } else {
+        u256_as_push(value)
+    })
+}
+
 #[derive(Debug, Clone)]
-pub struct CompileConfig {
+pub struct CompileGlobals<'src, 'ast> {
     pub allow_push0: bool,
+    pub defs: BTreeMap<&'src str, &'src Definition<'ast>>,
+    pub constants: BTreeMap<&'src str, U256>,
+}
+
+pub fn evalute_constants<'a>(
+    global_defs: &BTreeMap<&'a str, &Definition>,
+) -> BTreeMap<&'a str, U256> {
+    let mut free_pointer = 0u32;
+    global_defs
+        .iter()
+        .filter_map(|(name, def)| match def {
+            Definition::Constant { name: _, expr } => Some((name, expr)),
+            _ => None,
+        })
+        .map(|(name, expr)| match expr.0 {
+            ConstExpr::Value(v) => (*name, v),
+            ConstExpr::FreeStoragePointer => {
+                let current = free_pointer;
+                free_pointer += 1;
+                (*name, U256::from(current))
+            }
+        })
+        .collect()
 }
