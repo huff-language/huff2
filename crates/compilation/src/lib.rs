@@ -10,7 +10,7 @@ pub fn generate_for_entrypoint<'ast>(
     entry_point: &'ast Macro,
     mark_tracker: &'ast mut MarkTracker,
     config: &CompileConfig,
-) -> Vec<Asm> {
+) -> Result<Vec<Asm>, String> {
     let mut label_stack: LabelStack<usize> = LabelStack::default();
     let mut asm = Vec::with_capacity(10_000);
 
@@ -22,9 +22,9 @@ pub fn generate_for_entrypoint<'ast>(
         &mut label_stack,
         &mut asm,
         config,
-    );
+    )?;
 
-    asm
+    Ok(asm)
 }
 
 fn generate_for_macro<'ast, 'src>(
@@ -35,7 +35,7 @@ fn generate_for_macro<'ast, 'src>(
     label_stack: &'ast mut LabelStack<'src, usize>,
     asm: &mut Vec<Asm>,
     config: &CompileConfig,
-) {
+) -> Result<(), String> {
     let current_args: BTreeMap<&str, Asm> = BTreeMap::from_iter(
         current
             .args
@@ -53,42 +53,50 @@ fn generate_for_macro<'ast, 'src>(
         }
     });
 
-    current.body.iter().for_each(|stmt| match stmt {
-        MacroStatement::LabelDefinition(name) => {
-            asm.extend([
-                Asm::Mark(*label_stack.get(name.ident()).unwrap()),
-                Asm::Op(Opcode::JUMPDEST),
-            ]);
-        }
-        MacroStatement::Invoke(invoke) => match invoke {
-            Invoke::Macro { name, args } => {
-                let target =
-                    if let Definition::Macro(target) = global_defs.get(name.ident()).unwrap() {
-                        target
-                    } else {
-                        panic!("Target should've been validated to be macro")
-                    };
-                generate_for_macro(
-                    global_defs,
-                    target,
-                    args.0
-                        .iter()
-                        .map(|arg| instruction_to_asm(&current_args, label_stack, config, arg))
-                        .collect(),
-                    mark_tracker,
-                    label_stack,
-                    asm,
-                    config,
-                );
+    current.body.iter().try_for_each(|stmt| {
+        match stmt {
+            MacroStatement::LabelDefinition(name) => {
+                asm.extend([
+                    Asm::Mark(*label_stack.get(name.ident()).unwrap()),
+                    Asm::Op(Opcode::JUMPDEST),
+                ]);
             }
-            _ => todo!("Not yet implemented compilation for {:?}", invoke),
-        },
-        MacroStatement::Instruction(i) => {
-            asm.push(instruction_to_asm(&current_args, label_stack, config, i))
-        }
-    });
+            MacroStatement::Invoke(invoke) => match invoke {
+                Invoke::Macro { name, args } => {
+                    let target =
+                        if let Definition::Macro(target) = global_defs.get(name.ident()).unwrap() {
+                            target
+                        } else {
+                            panic!("Target should've been validated to be macro")
+                        };
+                    generate_for_macro(
+                        global_defs,
+                        target,
+                        args.0
+                            .iter()
+                            .map(|arg| instruction_to_asm(&current_args, label_stack, config, arg))
+                            .collect::<Result<_, String>>()?,
+                        mark_tracker,
+                        label_stack,
+                        asm,
+                        config,
+                    )?;
+                }
+                _ => Err(format!(
+                    "Compilation not yet implemented for this invocation type {:?}",
+                    invoke
+                ))?,
+            },
+            MacroStatement::Instruction(i) => {
+                asm.push(instruction_to_asm(&current_args, label_stack, config, i)?)
+            }
+        };
+        Result::<(), String>::Ok(())
+    })?;
 
     label_stack.leave_context();
+
+    Ok(())
 }
 
 fn instruction_to_asm(
@@ -96,19 +104,22 @@ fn instruction_to_asm(
     label_stack: &LabelStack<usize>,
     config: &CompileConfig,
     i: &Instruction,
-) -> Asm {
+) -> Result<Asm, String> {
     match i {
-        Instruction::Op((op, _)) => Asm::Op(*op),
+        Instruction::Op((op, _)) => Ok(Asm::Op(*op)),
         Instruction::VariablePush((value, _)) => {
             if value.byte_len() == 0 && config.allow_push0 {
-                Asm::Op(Opcode::PUSH0)
+                Ok(Asm::Op(Opcode::PUSH0))
             } else {
-                Asm::Op(u256_as_push(*value))
+                Ok(Asm::Op(u256_as_push(*value)))
             }
         }
-        Instruction::LabelReference(name) => Asm::mref(*label_stack.get(name.ident()).unwrap()),
-        Instruction::ConstantReference(_) => todo!("Constants not yet supported"),
-        Instruction::MacroArgReference(name) => args.get(name.ident()).unwrap().clone(),
+        Instruction::LabelReference(name) => Ok(Asm::mref(*label_stack.get(name.ident()).unwrap())),
+        Instruction::ConstantReference(name) => Err(format!(
+            "Invalid reference to constant '{}' (not yet supported)",
+            name.0
+        )),
+        Instruction::MacroArgReference(name) => Ok(args.get(name.ident()).unwrap().clone()),
     }
 }
 

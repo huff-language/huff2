@@ -54,7 +54,7 @@ pub enum AnalysisError<'ast, 'src> {
 impl AnalysisError<'_, '_> {
     pub fn report(&self, filename: String) -> Report<(String, std::ops::Range<usize>)> {
         match self {
-            AnalysisError::DefinitionNameCollision {
+            Self::DefinitionNameCollision {
                 collided,
                 duplicate_name,
             } => {
@@ -83,7 +83,7 @@ impl AnalysisError<'_, '_> {
                     ))
                     .finish()
             }
-            AnalysisError::EntryPointNotFound { name } => {
+            Self::EntryPointNotFound { name } => {
                 Report::build(ReportKind::Error, filename.clone(), 0)
                     .with_message(format!("Entry point '{}' not found", name.fg(Color::Red)))
                     .with_help(format!(
@@ -92,7 +92,7 @@ impl AnalysisError<'_, '_> {
                     ))
                     .finish()
             }
-            AnalysisError::RecursiveMacroInvocation { invocation_chain } => {
+            Self::RecursiveMacroInvocation { invocation_chain } => {
                 let first_invoke = invocation_chain.first().unwrap();
 
                 let base_report =
@@ -138,7 +138,7 @@ impl AnalysisError<'_, '_> {
                     ))
                     .finish()
             }
-            AnalysisError::MacroArgNotFound { scope, not_found } => {
+            Self::MacroArgNotFound { scope, not_found } => {
                 Report::build(ReportKind::Error, filename.clone(), not_found.1.start)
                     .with_config(Config::default().with_index_type(IndexType::Byte))
                     .with_message(format!(
@@ -177,7 +177,7 @@ impl AnalysisError<'_, '_> {
                     )
                     .finish()
             }
-            AnalysisError::DefinitionNotFound {
+            Self::DefinitionNotFound {
                 scope,
                 def_type,
                 not_found,
@@ -193,7 +193,7 @@ impl AnalysisError<'_, '_> {
                     Label::new((filename.clone(), not_found.1.into_range())).with_color(Color::Red),
                 )
                 .finish(),
-            AnalysisError::LabelNotFound {
+            Self::LabelNotFound {
                 scope,
                 invocation_chain,
                 not_found,
@@ -240,7 +240,7 @@ impl AnalysisError<'_, '_> {
                     ))
                     .finish()
             }
-            AnalysisError::MacroArgumentCountMismatch {
+            Self::MacroArgumentCountMismatch {
                 scope: _,
                 invoke,
                 args,
@@ -346,9 +346,15 @@ impl AnalysisError<'_, '_> {
                     .with_help("Rename the labels such that each definition is unique")
                     .finish()
             }
-            _ => Report::build(ReportKind::Error, filename.clone(), 0)
-                .with_message(format!("Error with unimplemented formatting: {:?}", self))
-                .finish(),
+            Self::NotYetSupported { intent, span } => {
+                Report::build(ReportKind::Error, filename.clone(), span.1.start)
+                    .with_config(Config::default().with_index_type(IndexType::Byte))
+                    .with_message(format!("{} is not yet supported", intent.fg(Color::Cyan),))
+                    .with_label(
+                        Label::new((filename.clone(), span.1.into_range())).with_color(Color::Red),
+                    )
+                    .finish()
+            }
         }
     }
 }

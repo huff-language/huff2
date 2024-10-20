@@ -1,0 +1,10 @@
+#define constant WOW = 0x123
+
+#define macro MAIN() = takes(0) returns(0) {
+    __codesize(NICE)
+    [WOW]
+}
+
+#define macro NICE(a) = takes(0) returns(0) {
+    
+}

@@ -1,0 +1,9 @@
+#define constant WOW = 0x123
+
+#define macro MAIN() = takes(0) returns(0) {
+    __codesize(SKIBIDI)
+}
+
+#define macro SKIBIDI(nice) = takes(0) returns(0) {
+    
+}

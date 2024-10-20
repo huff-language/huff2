@@ -115,7 +115,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = CompileConfig {
         allow_push0: cli.evm_version.allows_push0(),
     };
-    let asm = generate_for_entrypoint(&unique_defs, main_macro.unwrap(), &mut mtracker, &config);
+    let asm =
+        match generate_for_entrypoint(&unique_defs, main_macro.unwrap(), &mut mtracker, &config) {
+            Ok(asm) => asm,
+            Err(reason) => {
+                eprintln!("{}: {}", "Error".fg(Color::Red), reason);
+                std::process::exit(1);
+            }
+        };
 
     let code = assemble_minimized(asm.as_slice(), config.allow_push0).unwrap();
 
