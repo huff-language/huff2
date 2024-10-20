@@ -1,10 +1,9 @@
-use ariadne::{sources, Color, Config, IndexType, Label, Report, ReportKind};
+use ariadne::{sources, Color, Config, Fmt, IndexType, Label, Report, ReportKind};
 use clap::Parser as ClapParser;
 use evm_glue::{assemble_minimized, utils::MarkTracker};
 use huff_analysis::*;
 use huff_ast::{parse, RootSection};
 use huff_compilation::{generate_for_entrypoint, CompileConfig};
-use thiserror::Error;
 
 mod versions;
 use versions::EvmVersion;
@@ -51,21 +50,24 @@ struct Cli {
     evm_version: EvmVersion,
 }
 
-#[derive(Error, Debug)]
-enum HuffError {
-    /// Wrapper around `io::Error`
-    #[error("{0}")]
-    Io(#[from] std::io::Error),
-    // #[error("{0}")]
-    // Parser(Report),
-    // Parser(#[from] ParseError<usize, Token<'src>, huff_ast::Error>),
-}
-type HuffResult = Result<(), HuffError>;
-
-fn main() -> HuffResult {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let src = std::fs::read_to_string(&cli.filename)?;
+    let src_res = std::fs::read_to_string(&cli.filename);
+
+    if let Err(err) = &src_res {
+        if let std::io::ErrorKind::NotFound = err.kind() {
+            eprintln!(
+                "{}: File with path '{}' not found",
+                "Error".fg(Color::Red),
+                cli.filename.escape_debug()
+            );
+            std::process::exit(1);
+        }
+    };
+
+    let src = src_res?;
+
     let filename: String = cli.filename;
 
     let ast = match parse(&src) {

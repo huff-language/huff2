@@ -12,7 +12,6 @@ evm-glue.workspace = true
 
 ariadne.workspace = true
 clap.workspace = true
-thiserror.workspace = true
 hex = "0.4.3"
 
 [[bin]]
