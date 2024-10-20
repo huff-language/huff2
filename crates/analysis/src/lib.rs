@@ -47,9 +47,7 @@ pub fn analyze_entry_point<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)
     };
 
     if entry_point.args.0.len() != 0 {
-        emit_error(AnalysisError::MacroArgumentCountMismatch {
-            scope: None,
-            args: &[],
+        emit_error(AnalysisError::EntryPointHasArgs {
             target: entry_point,
         });
     }
@@ -135,6 +133,15 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
 
         let macro_args = build_ident_map(self.m.args.0.iter());
 
+        macro_args.iter().for_each(|(_, defs)| {
+            if defs.len() >= 2 {
+                self.emit(AnalysisError::DuplicateMacroArgDefinition {
+                    scope: self.m,
+                    duplicates: defs.clone().into_boxed_slice(),
+                });
+            }
+        });
+
         labels.iter().for_each(|(_name, defs)| {
             if defs.len() >= 2 {
                 self.emit(AnalysisError::DuplicateLabelDefinition {
@@ -154,7 +161,8 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                     // Check the arguments in the invocatino.
                     // Not actually redundant so making clippy stfu here.
                     #[allow(clippy::redundant_closure)]
-                    args.iter()
+                    args.0
+                        .iter()
                         .for_each(|arg| self.analyze_instruction(&macro_args, arg));
                     // Emit error if we don't find at least 1 macro by the given name.
                     if !global_exists!(self.global_defs, name.ident(), Definition::Macro(_)) {
@@ -180,9 +188,10 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                             }
                         })
                         .for_each(|macro_being_invoked| {
-                            if macro_being_invoked.args.0.len() != args.len() {
+                            if macro_being_invoked.args.0.len() != args.0.len() {
                                 self.emit(AnalysisError::MacroArgumentCountMismatch {
-                                    scope: Some(self.m),
+                                    scope: self.m,
+                                    invoke: name,
                                     args,
                                     target: macro_being_invoked,
                                 });
@@ -423,7 +432,7 @@ mod test {
         let span = SimpleSpan::new(0, 0);
         let invoke = Invoke::Macro {
             name: ("TheRizzler", span),
-            args: Box::new([]),
+            args: (Box::new([]), span),
         };
         let inner_macro = Macro {
             name: ("TheRizzler", span),
@@ -447,7 +456,7 @@ mod test {
 
         let invoke1 = Invoke::Macro {
             name: ("Top", span),
-            args: Box::new([]),
+            args: (Box::new([]), span),
         };
         let inner_m1 = Macro {
             name: ("VeryTop", span),
@@ -459,7 +468,7 @@ mod test {
 
         let invoke2 = Invoke::Macro {
             name: ("Lower", span),
-            args: Box::new([]),
+            args: (Box::new([]), span),
         };
         let inner_m2 = Macro {
             name: ("Top", span),
@@ -471,7 +480,7 @@ mod test {
 
         let invoke3 = Invoke::Macro {
             name: ("VeryTop", span),
-            args: Box::new([]),
+            args: (Box::new([]), span),
         };
         let inner_m3 = Macro {
             name: ("Lower", span),
@@ -501,7 +510,7 @@ mod test {
 
         let invoke = Invoke::Macro {
             name: ("MY_FUNC", invoke_span),
-            args: Box::new([]),
+            args: (Box::new([]), span),
         };
         let inner_macro = Macro {
             name: ("MAIN", span),
@@ -534,7 +543,7 @@ mod test {
                 MacroStatement::LabelDefinition(("wow", span)),
                 MacroStatement::Invoke(Invoke::Macro {
                     name: ("OTHER", span),
-                    args: Box::new([]),
+                    args: (Box::new([]), span),
                 }),
             ]),
         };

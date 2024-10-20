@@ -71,7 +71,8 @@ fn generate_for_macro<'ast, 'src>(
                 generate_for_macro(
                     global_defs,
                     target,
-                    args.into_iter()
+                    args.0
+                        .iter()
                         .map(|arg| instruction_to_asm(&current_args, label_stack, config, arg))
                         .collect(),
                     mark_tracker,
