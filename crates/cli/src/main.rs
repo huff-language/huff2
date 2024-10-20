@@ -3,7 +3,7 @@ use clap::Parser as ClapParser;
 use evm_glue::{assemble_minimized, utils::MarkTracker};
 use huff_analysis::*;
 use huff_ast::{parse, RootSection};
-use huff_compilation::{generate_for_entrypoint, CompileConfig};
+use huff_compilation::{evalute_constants, generate_for_entrypoint, CompileGlobals};
 
 mod versions;
 use versions::EvmVersion;
@@ -112,17 +112,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut mtracker = MarkTracker::default();
-    let config = CompileConfig {
-        allow_push0: cli.evm_version.allows_push0(),
+    let config = {
+        let constants = evalute_constants(&unique_defs);
+        CompileGlobals {
+            allow_push0: cli.evm_version.allows_push0(),
+            defs: unique_defs,
+            constants,
+        }
     };
-    let asm =
-        match generate_for_entrypoint(&unique_defs, main_macro.unwrap(), &mut mtracker, &config) {
-            Ok(asm) => asm,
-            Err(reason) => {
-                eprintln!("{}: {}", "Error".fg(Color::Red), reason);
-                std::process::exit(1);
-            }
-        };
+    let asm = match generate_for_entrypoint(&config, main_macro.unwrap(), &mut mtracker) {
+        Ok(asm) => asm,
+        Err(reason) => {
+            eprintln!("{}: {}", "Error".fg(Color::Red), reason);
+            std::process::exit(1);
+        }
+    };
 
     let code = assemble_minimized(asm.as_slice(), config.allow_push0).unwrap();
 

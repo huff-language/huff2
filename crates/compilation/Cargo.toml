@@ -8,3 +8,4 @@ license.workspace = true
 huff-analysis.workspace = true
 huff-ast.workspace = true
 evm-glue.workspace = true
+alloy-primitives.workspace = true

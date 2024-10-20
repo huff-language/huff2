@@ -967,6 +967,7 @@ dependencies = [
 name = "huff-compilation"
 version = "0.0.1"
 dependencies = [
+ "alloy-primitives",
  "evm-glue",
  "huff-analysis",
  "huff-ast",
