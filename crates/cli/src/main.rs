@@ -53,6 +53,14 @@ struct Cli {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
+    if matches!(cli.evm_version, EvmVersion::Eof) {
+        eprintln!(
+            "{}: EVM Version 'EOF' not yet supported",
+            "Error".fg(Color::Red),
+        );
+        std::process::exit(1);
+    }
+
     let src_res = std::fs::read_to_string(&cli.filename);
 
     if let Err(err) = &src_res {
@@ -92,9 +100,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut analysis_errors = Vec::with_capacity(5);
-    let global_defs = build_ident_map(ast.0.iter().map(|section| match section {
-        RootSection::Include(_) => todo!("Include not yet supported"),
-        RootSection::Definition(def) => def,
+    let global_defs = build_ident_map(ast.0.iter().filter_map(|section| match section {
+        RootSection::Include(huff_include) => {
+            analysis_errors.push(errors::AnalysisError::NotYetSupported {
+                intent: "Huff '#include'".to_owned(),
+                span: ((), huff_include.1),
+            });
+            None
+        }
+        RootSection::Definition(def) => Some(def),
     }));
     let unique_defs = analyze_global_for_dups(&global_defs, |err| analysis_errors.push(err));
 
