@@ -107,7 +107,7 @@ impl Instruction<'_> {
 pub enum Invoke<'src> {
     Macro {
         name: Spanned<&'src str>,
-        args: Box<[Instruction<'src>]>,
+        args: Spanned<Box<[Instruction<'src>]>>,
     },
     BuiltinTableStart(Spanned<&'src str>),
     BuiltinTableSize(Spanned<&'src str>),

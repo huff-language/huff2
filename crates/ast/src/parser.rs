@@ -229,7 +229,7 @@ fn invoke<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Invoke<'s
         .separated_by(punct(','))
         .collect::<Vec<_>>()
         .delimited_by(punct('('), punct(')'))
-        .map(|args| args.into_boxed_slice());
+        .map_with(|args, ex| (args.into_boxed_slice(), ex.span()));
 
     let invoke_macro = ident()
         .then(invoke_macro_args)
@@ -582,7 +582,10 @@ mod tests {
             vec![Ident("READ_ADDRESS"), Punct('('), Hex("0x4"), Punct(')')],
             ast::MacroStatement::Invoke(ast::Invoke::Macro {
                 name: ("READ_ADDRESS", span),
-                args: Box::new([ast::Instruction::VariablePush((uint!(4U256), span))])
+                args: (
+                    Box::new([ast::Instruction::VariablePush((uint!(4U256), span))]),
+                    span
+                )
             })
         );
     }

@@ -28,9 +28,13 @@ pub enum AnalysisError<'ast, 'src> {
         def_type: &'static str,
         not_found: &'ast Spanned<&'src str>,
     },
+    EntryPointHasArgs {
+        target: &'ast Macro<'src>,
+    },
     MacroArgumentCountMismatch {
-        scope: Option<&'ast Macro<'src>>,
-        args: &'ast [Instruction<'src>],
+        scope: &'ast Macro<'src>,
+        invoke: &'ast Spanned<&'src str>,
+        args: &'ast Spanned<Box<[Instruction<'src>]>>,
         target: &'ast Macro<'src>,
     },
     DuplicateLabelDefinition {
@@ -230,6 +234,116 @@ impl AnalysisError<'_, '_> {
                                 scope.ident().fg(Color::Blue)
                             )),
                     )
+                    .with_help(format!(
+                        "Ensure you've correctly entered the label (case-sensitive) or {}",
+                        "make sure to define it."
+                    ))
+                    .finish()
+            }
+            AnalysisError::MacroArgumentCountMismatch {
+                scope: _,
+                invoke,
+                args,
+                target,
+            } => {
+                let has_s = if target.args.0.len() == 1 { "" } else { "s" };
+                let invoke_arg_span = args.1.start + 1..args.1.end - 1;
+
+                Report::build(ReportKind::Error, filename.clone(), target.span().start)
+                    .with_config(Config::default().with_index_type(IndexType::Byte))
+                    .with_message(format!(
+                        "Macro '{}' takes {} argument{}, invoked with {}",
+                        target.ident().fg(Color::Blue),
+                        target.args.0.len(),
+                        has_s,
+                        args.0.len()
+                    ))
+                    .with_label(
+                        Label::new((filename.clone(), invoke.span().into_range()))
+                            .with_color(Color::Blue),
+                    )
+                    .with_label(
+                        Label::new((filename.clone(), invoke_arg_span))
+                            .with_color(Color::Red)
+                            .with_message(format!(
+                                "Input argument count ({}) != expected count ({})",
+                                args.0.len(),
+                                target.args.0.len(),
+                            )),
+                    )
+                    .with_help(
+                        "Add/Remove the invalid arguments or change the macro being invoked.",
+                    )
+                    .finish()
+            }
+            Self::EntryPointHasArgs { target } => {
+                let inner_arg_span = target.args.1.start + 1..target.args.1.end - 1;
+
+                Report::build(ReportKind::Error, filename.clone(), target.span().start)
+                    .with_config(Config::default().with_index_type(IndexType::Byte))
+                    .with_message(format!(
+                        "Entry point macro '{}' is expected to have 0 arguments, found {}",
+                        target.ident().fg(Color::Blue),
+                        target.args.0.len()
+                    ))
+                    .with_label(
+                        Label::new((filename.clone(), target.span().into_range()))
+                            .with_color(Color::Blue),
+                    )
+                    .with_label(
+                        Label::new((filename.clone(), inner_arg_span))
+                            .with_color(Color::Red)
+                            .with_message("Should be empty"),
+                    )
+                    .with_help(format!(
+                        "Remove the arguments from the entry point. If you need {}{}",
+                        "a customizable top-level contract use constant-overrides with -c",
+                        " or rename the macro and instantiate it from the entrypoint."
+                    ))
+                    .finish()
+            }
+            Self::DuplicateMacroArgDefinition { scope, duplicates } => {
+                let dups_start = duplicates.iter().map(|dup| dup.1.start).min().unwrap();
+                let arg_name = duplicates.first().unwrap().0;
+
+                Report::build(ReportKind::Error, filename.clone(), dups_start)
+                    .with_config(Config::default().with_index_type(IndexType::Byte))
+                    .with_message(format!(
+                        "Duplicate macro argument '{}' defined in '{}'.{}",
+                        arg_name.fg(Color::Red),
+                        scope.ident().fg(Color::Blue),
+                        " Macro arguments must have unique identifiers."
+                    ))
+                    .with_label(
+                        Label::new((filename.clone(), scope.span().into_range()))
+                            .with_color(Color::Blue),
+                    )
+                    .with_labels(duplicates.iter().map(|dup| {
+                        Label::new((filename.clone(), dup.1.into_range())).with_color(Color::Red)
+                    }))
+                    .with_help("Rename the arguments such that each name is unique")
+                    .finish()
+            }
+            Self::DuplicateLabelDefinition { scope, duplicates } => {
+                let dups_start = duplicates.iter().map(|dup| dup.1.start).min().unwrap();
+                let label_name = duplicates.first().unwrap().0;
+
+                Report::build(ReportKind::Error, filename.clone(), dups_start)
+                    .with_config(Config::default().with_index_type(IndexType::Byte))
+                    .with_message(format!(
+                        "Duplicate label '{}' defined in '{}'.{}",
+                        label_name.fg(Color::Red),
+                        scope.ident().fg(Color::Blue),
+                        " Label definitions must be unique in every macro."
+                    ))
+                    .with_label(
+                        Label::new((filename.clone(), scope.span().into_range()))
+                            .with_color(Color::Blue),
+                    )
+                    .with_labels(duplicates.iter().map(|dup| {
+                        Label::new((filename.clone(), dup.1.into_range())).with_color(Color::Red)
+                    }))
+                    .with_help("Rename the labels such that each definition is unique")
                     .finish()
             }
             _ => Report::build(ReportKind::Error, filename.clone(), 0)

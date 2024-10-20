@@ -1,0 +1,17 @@
+#define macro MAIN() = takes(0) returns(0) {
+    start:
+    VERY_NICE()
+    start:
+}
+
+#define macro VERY_NICE() = takes(0) returns(0) {
+    again:
+
+    0x372af
+    0x372af
+    0x372af again
+    0x372af
+
+    again:
+
+}

@@ -1,0 +1,8 @@
+#define macro MAIN() = takes(0) returns(0) {
+    WOW(0x1, 0x2, stop)
+}
+
+#define macro WOW(nicu, skibid, nicu) = takes(0) returns(0) { yaaaaaaaaaa
+    stop
+    yaaaaaaaaaa:
+}
