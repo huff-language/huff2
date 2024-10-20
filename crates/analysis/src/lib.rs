@@ -133,6 +133,8 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
             return;
         }
 
+        self.label_stack.enter_context();
+
         let labels = build_ident_map(self.m.body.iter().filter_map(|stmt| match stmt {
             MacroStatement::LabelDefinition(label_name) => {
                 self.label_stack.add(label_name.ident());
@@ -151,8 +153,6 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                 })
             }
         });
-
-        self.label_stack.enter_context();
 
         self.m.body.iter().for_each(|stmt| match stmt {
             MacroStatement::LabelDefinition(_) => {}
