@@ -11,32 +11,17 @@ high-level its goals are:
 
 1. (🚧 Current WIP) _mostly_ backwards compatible compiler, with good error handling and error messages
    - [x] Grammar + Lexer + Parser
-   - [ ] Parser error recovery
-       - [ ] Basic invalid tokens
-       - [ ] Unclosed brackets
-       - [ ] Invalid nested definitions
-   - [ ] Semantic Analysis
-       - [ ] Global map of top-level definitions
-       - [ ] Macro & macro arg reference validation
-       - [ ] Pretty errors
-       - [ ] Track tree of macro invocations & label definitions
-       - [ ] Resolve label references & error on ambiguous label references
-       - [ ] Resolve set of "objects" to include in compilation (code tables, jump tables, macros)
-       - [ ] Resolve table labels based on scope in which they're referenced
+   - [x] Semantic Analysis
    - [ ] CLI & Compilation
-       - [ ] Runtime/Initcode flags (`-r` vs. `-b`)
-       - [ ] Default constructor generation when `-b` and no explicit constructor set
-       - [ ] Ability to output sizes for contracts
-       - [ ] ABI Builtins
 2. Add small QoL features:
     - [ ] Pushed tables (jump tables that are inlined as `PUSH<X>` instructions)
     - [ ] Make redundant syntax like `#define` optional
-    - [ ] Decimal & binary literals
-    - [ ] Make macros hygenic by making labels scoped
-    - [ ] Introduce "function" labels for explicit out-of-scope jumping
-3. Add EOF v1 support
-4. ??? Expand the language even further (potential ideas)
+    - [x] Decimal & binary literals
+    - [x] Make macros hygenic by making labels scoped
+    - [ ] Better parser error recovery
+3. ??? Expand the language even further (potential ideas)
     - BALLS integration for automated stack scheduling
     - Comp-time expressions
         - basic operators (`+ - / * ^ | & !`) on literals and comp-time builtin outputs
         - bytes/string literals
+4. Add EOF v1 support
