@@ -155,14 +155,19 @@ impl AnalysisError<'_, '_> {
                         Label::new((filename.clone(), not_found.1.into_range()))
                             .with_color(Color::Red),
                     )
-                    .with_label(
+                    .with_label(if scope.args.0.is_empty() {
                         Label::new((filename.clone(), scope.args.1.into_range()))
                             .with_color(Color::Red)
+                            .with_message("no arguments")
+                    } else {
+                        let args_list_span = scope.args.1.start + 1..scope.args.1.end - 1;
+                        Label::new((filename.clone(), args_list_span))
+                            .with_color(Color::Red)
                             .with_message(format!(
-                                "no '{}' in argument list",
-                                not_found.0.fg(Color::Red)
-                            )),
-                    )
+                                "No '{}' in arguments list",
+                                not_found.ident().fg(Color::Red)
+                            ))
+                    })
                     .with_help(
                         "Ensure the argument exists and is correct (names are case-sensitive)",
                     )
@@ -184,6 +189,49 @@ impl AnalysisError<'_, '_> {
                     Label::new((filename.clone(), not_found.1.into_range())).with_color(Color::Red),
                 )
                 .finish(),
+            AnalysisError::LabelNotFound {
+                scope,
+                invocation_chain,
+                not_found,
+            } => {
+                Report::build(ReportKind::Error, filename.clone(), not_found.1.start)
+                    .with_config(Config::default().with_index_type(IndexType::Byte))
+                    .with_message(format!(
+                        "Label '{}' not found in macro {} or its parent contexts",
+                        not_found.ident().fg(Color::Red),
+                        scope.ident().fg(Color::Blue)
+                    ))
+                    .with_labels(invocation_chain.iter().rev().flat_map(
+                        |(parent_scope, invoke)| {
+                            [
+                                Label::new((filename.clone(), parent_scope.span().into_range()))
+                                    .with_color(Color::Yellow)
+                                    .with_message(format!(
+                                        "No label '{}' found in parent {}",
+                                        not_found.ident().fg(Color::Red),
+                                        parent_scope.ident().fg(Color::Yellow)
+                                    )),
+                                Label::new((filename.clone(), invoke.1.into_range())).with_color(
+                                    if invoke.ident() == scope.ident() {
+                                        Color::Blue
+                                    } else {
+                                        Color::Yellow
+                                    },
+                                ),
+                            ]
+                        },
+                    ))
+                    .with_label(
+                        Label::new((filename.clone(), scope.span().into_range()))
+                            .with_color(Color::Blue)
+                            .with_message(format!(
+                                "No label '{}' found in {}",
+                                not_found.ident().fg(Color::Red),
+                                scope.ident().fg(Color::Blue)
+                            )),
+                    )
+                    .finish()
+            }
             _ => Report::build(ReportKind::Error, filename.clone(), 0)
                 .with_message(format!("Error with unimplemented formatting: {:?}", self))
                 .finish(),
