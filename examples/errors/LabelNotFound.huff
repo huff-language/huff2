@@ -1,0 +1,22 @@
+#define macro MAIN() = takes(0) returns(0) {
+    LABEL_AWAY()
+    FIRST()
+}
+
+#define macro LABEL_AWAY() = takes(0) returns(0) {
+    nice:
+    SECOND()
+}
+
+#define macro FIRST() = takes(0) returns(0) {
+    stop
+    stop
+    stop
+    stop
+    SECOND()
+}
+
+
+#define macro SECOND() = takes(0) returns(0) {
+    nice 0x1
+}
