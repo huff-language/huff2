@@ -1,0 +1,16 @@
+#define macro MAIN() = takes(0) returns(0) {
+    MAIN()
+    stop add
+    jumpdest
+
+    NESTED()
+}
+
+#define macro NESTED() = takes(0) returns(0) {
+    0x34
+    DEEPER()
+}
+
+#define macro DEEPER() = takes(0) returns(0) {
+    MAIN()
+}

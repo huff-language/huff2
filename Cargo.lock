@@ -934,6 +934,7 @@ dependencies = [
 name = "huff-analysis"
 version = "0.0.1"
 dependencies = [
+ "ariadne",
  "chumsky",
  "huff-ast",
 ]

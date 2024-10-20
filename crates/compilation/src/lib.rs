@@ -36,8 +36,14 @@ fn generate_for_macro<'ast, 'src>(
     asm: &mut Vec<Asm>,
     config: &CompileConfig,
 ) {
-    let current_args: BTreeMap<&str, Asm> =
-        BTreeMap::from_iter(current.args.iter().map(|name| name.ident()).zip(arg_values));
+    let current_args: BTreeMap<&str, Asm> = BTreeMap::from_iter(
+        current
+            .args
+            .0
+            .iter()
+            .map(|name| name.ident())
+            .zip(arg_values),
+    );
     current.body.iter().for_each(|stmt| {
         if let MacroStatement::LabelDefinition(name) = stmt {
             label_stack.push(name.ident(), mark_tracker.next_mark());
