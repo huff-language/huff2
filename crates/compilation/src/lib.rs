@@ -83,7 +83,7 @@ fn generate_for_macro<'ast, 'src>(
                     )?;
                 }
                 _ => Err(format!(
-                    "Compilation not yet implemented for this invocation type {:?}",
+                    "Compilation not yet implemented for this invocation type `{:?}`",
                     invoke
                 ))?,
             },
