@@ -4,7 +4,7 @@ pub mod label_stack;
 use crate::errors::AnalysisError;
 use crate::label_stack::LabelStack;
 use huff_ast::{Definition, IdentifiableNode, Instruction, Invoke, Macro, MacroStatement, Spanned};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 pub fn analyze_global_for_dups<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
     global_defs: &BTreeMap<&'src str, Vec<&'ast Definition<'src>>>,
@@ -31,7 +31,6 @@ pub fn analyze_entry_point<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)
     entry_point_name: &'src str,
     mut emit_error: E,
 ) -> Option<&'ast Macro<'src>> {
-    let mut analyzed_macros: BTreeSet<&str> = BTreeSet::new();
     let mut invoke_stack = Vec::with_capacity(32);
     let mut label_stack = LabelStack::default();
 
@@ -60,7 +59,6 @@ pub fn analyze_entry_point<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)
         entry_point,
         &mut label_stack,
         &mut invoke_stack,
-        &mut analyzed_macros,
         &mut emit_error,
     );
 
@@ -86,7 +84,6 @@ struct MacroAnalysis<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> 
     m: &'ast Macro<'src>,
     label_stack: &'a mut LabelStack<'src, ()>,
     invoke_stack: &'a mut Vec<(&'ast Macro<'src>, &'ast Spanned<&'src str>)>,
-    validated_macros: &'a mut BTreeSet<&'src str>,
     emit_error: &'a mut E,
 }
 
@@ -100,7 +97,6 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
         m: &'ast Macro<'src>,
         label_stack: &'a mut LabelStack<'src, ()>,
         invoke_stack: &'a mut Vec<(&'ast Macro<'src>, &'ast Spanned<&'src str>)>,
-        validated_macros: &'a mut BTreeSet<&'src str>,
         emit_error: &'a mut E,
     ) {
         MacroAnalysis {
@@ -108,7 +104,6 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
             m,
             label_stack,
             invoke_stack,
-            validated_macros,
             emit_error,
         }
         .analyze();
@@ -116,11 +111,6 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
 
     fn analyze(&mut self) {
         let name = self.m.name.0;
-
-        // If we already validated this macro, return.
-        if self.validated_macros.contains(name) {
-            return;
-        }
 
         if self
             .invoke_stack
@@ -202,15 +192,10 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                                 macro_being_invoked,
                                 self.label_stack,
                                 self.invoke_stack,
-                                self.validated_macros,
                                 self.emit_error,
                             );
                         });
                     self.invoke_stack.pop().unwrap();
-
-                    if name.ident() != self.m.ident() {
-                        self.validated_macros.insert(name.ident());
-                    }
                 }
                 Invoke::BuiltinTableSize(table_ref) | Invoke::BuiltinTableStart(table_ref) => {
                     if !global_exists!(
