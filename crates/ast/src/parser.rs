@@ -331,6 +331,10 @@ fn sol_type<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Spanned<DynS
     recursive(|sol_raw_type| {
         let sol_raw_primitive_type = ident().map(|(typ, _)| typ.to_string()).boxed();
 
+        let sol_raw_event_primitive_type = sol_raw_primitive_type
+            .clone()
+            .then_ignore(just(Ident("indexed")));
+
         let sol_raw_tuple_type = just(Punct('('))
             .ignore_then(
                 sol_raw_type
@@ -347,26 +351,30 @@ fn sol_type<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Spanned<DynS
             })
             .boxed();
 
-        choice((sol_raw_primitive_type, sol_raw_tuple_type))
-            .then(
-                just(Punct('['))
-                    .ignore_then(dec().or_not())
-                    .then_ignore(just(Punct(']')))
-                    .or_not(),
-            )
-            .then_ignore(ident().or_not())
-            .map(|(typ, slice)| {
-                let mut result = typ;
-                if let Some(size) = slice {
-                    result.push('[');
-                    if let Some((n, _span)) = size {
-                        result.push_str(&n.to_string());
-                    }
-                    result.push(']');
+        choice((
+            sol_raw_event_primitive_type,
+            sol_raw_primitive_type,
+            sol_raw_tuple_type,
+        ))
+        .then(
+            just(Punct('['))
+                .ignore_then(dec().or_not())
+                .then_ignore(just(Punct(']')))
+                .or_not(),
+        )
+        .then_ignore(ident().or_not())
+        .map(|(typ, slice)| {
+            let mut result = typ;
+            if let Some(size) = slice {
+                result.push('[');
+                if let Some((n, _span)) = size {
+                    result.push_str(&n.to_string());
                 }
-                result
-            })
-            .boxed()
+                result.push(']');
+            }
+            result
+        })
+        .boxed()
     })
     .try_map_with(|typ, ex| {
         DynSolType::parse(&typ)
