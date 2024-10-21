@@ -1,0 +1,12 @@
+[package]
+name = "huff-analysis"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+huff-ast.workspace = true
+ariadne.workspace = true
+
+[dev-dependencies]
+chumsky.workspace = true

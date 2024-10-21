@@ -1,0 +1,15 @@
+#define macro MAIN() = takes(0) returns(0) {
+    stop
+    stop
+    stop
+    stop
+    stop
+    0x879234af8c
+    <wow>
+    HAS_LABEL(0x1)
+}
+
+#define macro HAS_LABEL(five, seven, eight) = takes(0) returns(0) {
+    label:
+    <six>
+}

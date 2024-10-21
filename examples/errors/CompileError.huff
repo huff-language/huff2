@@ -1,0 +1,11 @@
+#define constant WOW = 0x123
+#define error NotSoNice()
+
+#define macro MAIN() = takes(0) returns(0) {
+    __FUNC_SIG(NotSoNice)
+    [WOW]
+}
+
+#define macro NICE(a) = takes(0) returns(0) {
+    
+}

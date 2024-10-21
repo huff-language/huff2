@@ -1,0 +1,13 @@
+#define constant WOW = FREE_STORAGE_POINTER()
+
+#define macro MAIN() = takes(0) returns(0) {
+    WOW()
+}
+
+#define table WOW {
+    0x4234
+}
+
+#define macro WOW() = {
+    stop add
+}

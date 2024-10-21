@@ -3,21 +3,21 @@ use alloy_primitives::U256;
 use chumsky::span::SimpleSpan;
 use evm_glue::opcodes::Opcode;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Root<'src>(pub Box<[RootSection<'src>]>);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RootSection<'src> {
     Definition(Definition<'src>),
-    Include(Spanned<&'src str>),
+    Include(Spanned<String>),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Definition<'src> {
     Macro(Macro<'src>),
     Constant {
         name: Spanned<&'src str>,
-        value: U256,
+        expr: Spanned<ConstExpr>,
     },
     Jumptable(Jumptable<'src>),
     Table {
@@ -29,34 +29,85 @@ pub enum Definition<'src> {
     SolError(SolError<'src>),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+pub trait IdentifiableNode<'a> {
+    fn spanned(&self) -> &Spanned<&'a str>;
+
+    fn ident(&self) -> &'a str {
+        self.spanned().0
+    }
+
+    fn span(&self) -> Span {
+        self.spanned().1
+    }
+}
+
+impl<'src> IdentifiableNode<'src> for Definition<'src> {
+    fn spanned(&self) -> &Spanned<&'src str> {
+        match self {
+            Self::Macro(m) => &m.name,
+            Self::Constant { name, .. } => name,
+            Self::Jumptable(jt) => &jt.name,
+            Self::Table { name, .. } => name,
+            Self::SolEvent(e) => &e.name,
+            Self::SolError(e) => &e.name,
+            Self::SolFunction(f) => &f.name,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Macro<'src> {
     pub name: Spanned<&'src str>,
-    pub args: Box<[Spanned<&'src str>]>,
+    pub args: Spanned<Box<[Spanned<&'src str>]>>,
     pub takes_returns: Option<(Spanned<usize>, Spanned<usize>)>,
     pub body: Box<[MacroStatement<'src>]>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+impl<'src> IdentifiableNode<'src> for Macro<'src> {
+    fn spanned(&self) -> &Spanned<&'src str> {
+        &self.name
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConstExpr {
+    Value(U256),
+    FreeStoragePointer,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MacroStatement<'src> {
     LabelDefinition(Spanned<&'src str>),
     Instruction(Instruction<'src>),
     Invoke(Invoke<'src>),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Instruction<'src> {
     Op(Spanned<Opcode>),
+    VariablePush(Spanned<U256>),
     LabelReference(Spanned<&'src str>),
     MacroArgReference(Spanned<&'src str>),
     ConstantReference(Spanned<&'src str>),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+impl Instruction<'_> {
+    pub fn get_span(&self) -> Span {
+        match self {
+            Self::Op(s) => s.1,
+            Self::VariablePush(s) => s.1,
+            Self::LabelReference(name)
+            | Self::MacroArgReference(name)
+            | Self::ConstantReference(name) => name.1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Invoke<'src> {
     Macro {
         name: Spanned<&'src str>,
-        args: Box<[Instruction<'src>]>,
+        args: Spanned<Box<[Instruction<'src>]>>,
     },
     BuiltinTableStart(Spanned<&'src str>),
     BuiltinTableSize(Spanned<&'src str>),
@@ -67,27 +118,27 @@ pub enum Invoke<'src> {
     BuiltinError(Spanned<&'src str>),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Jumptable<'src> {
-    pub name: (Span, &'src str),
+    pub name: Spanned<&'src str>,
     pub size: u8,
     pub labels: Box<[&'src str]>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SolFunction<'src> {
     pub name: Spanned<&'src str>,
     pub args: Box<[Spanned<DynSolType>]>,
     pub rets: Box<[Spanned<DynSolType>]>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SolEvent<'src> {
     pub name: Spanned<&'src str>,
     pub args: Box<[Spanned<DynSolType>]>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SolError<'src> {
     pub name: Spanned<&'src str>,
     pub args: Box<[Spanned<DynSolType>]>,
@@ -98,3 +149,9 @@ pub type Span = SimpleSpan<usize>;
 
 /// A spanned value.
 pub type Spanned<T> = (T, Span);
+
+impl<'src> IdentifiableNode<'src> for Spanned<&'src str> {
+    fn spanned(&self) -> &Spanned<&'src str> {
+        self
+    }
+}

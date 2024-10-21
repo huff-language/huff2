@@ -4,7 +4,7 @@ use crate::{
         lex,
         Token::{self, *},
     },
-    util::{u256_as_push, u256_as_push_data},
+    util::u256_as_push_data,
     Span, Spanned,
 };
 use alloy_dyn_abi::DynSolType;
@@ -64,11 +64,12 @@ fn root<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Root<'src>>
 }
 
 fn root_section<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::RootSection<'src>> {
+    let definition = definition().map(ast::RootSection::Definition);
     let include = just(Keyword("include"))
         .ignore_then(select! {String(s) => s}.map_with(|s, ex| (s, ex.span())))
         .map(ast::RootSection::Include);
 
-    choice((definition().map(ast::RootSection::Definition), include))
+    choice((definition, include))
 }
 
 fn definition<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
@@ -83,31 +84,32 @@ fn definition<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Defin
 }
 
 fn r#macro<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
-    let macro_args = ident().separated_by(just(Punct(','))).collect::<Vec<_>>();
+    let macro_args = ident().separated_by(punct(',')).collect::<Vec<_>>();
 
     just(Ident("macro"))
         .ignore_then(ident())
-        .then_ignore(just(Punct('(')))
-        .then(macro_args)
-        .then_ignore(just(Punct(')')))
-        .then_ignore(just(Punct('=')))
+        .then(
+            macro_args
+                .delimited_by(punct('('), punct(')'))
+                .map_with(|args, ex| (args.into_boxed_slice(), ex.span())),
+        )
+        .then_ignore(punct('='))
         .then(
             just(Ident("takes"))
-                .ignore_then(just(Punct('(')))
-                .ignore_then(dec())
-                .then_ignore(just(Punct(')')))
+                .ignore_then(dec().delimited_by(punct('('), punct(')')))
                 .then_ignore(just(Ident("returns")))
-                .then_ignore(just(Punct('(')))
-                .then(dec())
-                .then_ignore(just(Punct(')')))
+                .then(dec().delimited_by(punct('('), punct(')')))
                 .or_not(),
         )
-        .then_ignore(just(Punct('{')))
-        .then(macro_statement().repeated().collect::<Vec<_>>())
-        .then_ignore(just(Punct('}')))
+        .then(
+            macro_statement()
+                .repeated()
+                .collect::<Vec<_>>()
+                .delimited_by(punct('{'), punct('}')),
+        )
         .map(|(((name, args), takes_returns), body)| ast::Macro {
             name,
-            args: args.into_boxed_slice(),
+            args,
             takes_returns,
             body: body.into_boxed_slice(),
         })
@@ -117,7 +119,7 @@ fn r#macro<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definiti
 fn macro_statement<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::MacroStatement<'src>>
 {
     let label = ident()
-        .then_ignore(just(Punct(':')))
+        .then_ignore(punct(':'))
         .map(ast::MacroStatement::LabelDefinition);
     let instruction = instruction().map(ast::MacroStatement::Instruction);
     let invoke = invoke().map(ast::MacroStatement::Invoke);
@@ -126,7 +128,7 @@ fn macro_statement<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::
 }
 
 fn instruction<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Instruction<'src>> {
-    let push_auto = word().map(|(value, span)| (ast::Instruction::Op((u256_as_push(value), span))));
+    let push_auto = word().map(|(value, span)| (ast::Instruction::VariablePush((value, span))));
 
     let push = select! {
         Ident("push1") => 1,
@@ -212,27 +214,22 @@ fn instruction<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Inst
             ast::Instruction::LabelReference((ident, span))
         }
     });
-    let macro_arg_ref = just(Punct('<'))
-        .ignore_then(ident())
-        .then_ignore(just(Punct('>')))
+    let macro_arg_ref = ident()
+        .delimited_by(punct('<'), punct('>'))
         .map(ast::Instruction::MacroArgReference);
-    let constant_ref = just(Punct('['))
-        .ignore_then(ident())
-        .then_ignore(just(Punct(']')))
+    let constant_ref = ident()
+        .delimited_by(punct('['), punct(']'))
         .map(ast::Instruction::ConstantReference);
 
     choice((push_auto, push, op, macro_arg_ref, constant_ref))
 }
 
 fn invoke<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Invoke<'src>> {
-    let invoke_macro_args = just(Punct('('))
-        .ignore_then(
-            instruction()
-                .separated_by(just(Punct(',')))
-                .collect::<Vec<_>>(),
-        )
-        .then_ignore(just(Punct(')')))
-        .map(|args| args.into_boxed_slice());
+    let invoke_macro_args = instruction()
+        .separated_by(punct(','))
+        .collect::<Vec<_>>()
+        .delimited_by(punct('('), punct(')'))
+        .map_with(|args, ex| (args.into_boxed_slice(), ex.span()));
 
     let invoke_macro = ident()
         .then(invoke_macro_args)
@@ -240,9 +237,9 @@ fn invoke<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Invoke<'s
 
     let invoke_builtin = |name, constructor: fn((_, Span)) -> ast::Invoke<'src>| {
         just(Ident(name))
-            .ignore_then(just(Punct('(')))
+            .ignore_then(punct('('))
             .ignore_then(ident())
-            .then_ignore(just(Punct(')')))
+            .then_ignore(punct(')'))
             .map(constructor)
     };
 
@@ -259,19 +256,30 @@ fn invoke<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Invoke<'s
 }
 
 fn constant<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
+    let const_expr = choice((
+        word().map(|(value, span)| (ast::ConstExpr::Value(value), span)),
+        just(Ident("FREE_STORAGE_POINTER"))
+            .ignore_then(just(Punct('(')))
+            .ignore_then(just(Punct(')')))
+            .map_with(|_, ex| (ast::ConstExpr::FreeStoragePointer, ex.span())),
+    ));
+
     just(Ident("constant"))
         .ignore_then(ident())
-        .then_ignore(just(Punct('=')))
-        .then(word())
-        .map(|(name, (value, _))| ast::Definition::Constant { name, value })
+        .then_ignore(punct('='))
+        .then(const_expr)
+        .map(|(name, expr)| ast::Definition::Constant { name, expr })
 }
 
 fn table<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
     just(Ident("table"))
         .ignore_then(ident())
-        .then_ignore(just(Punct('{')))
-        .then(code().repeated().collect::<Vec<_>>())
-        .then_ignore(just(Punct('}')))
+        .then(
+            code()
+                .repeated()
+                .collect::<Vec<_>>()
+                .delimited_by(punct('{'), punct('}')),
+        )
         .map(|(name, code)| ast::Definition::Table {
             name,
             data: code
@@ -287,13 +295,18 @@ fn sol_function<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Def
         .ignore_then(ident())
         .then(sol_type_list())
         .then(
-            choice((just(Ident("public")), just(Ident("external"))))
-                .then_ignore(choice((just(Ident("view")), just(Ident("pure")))).or_not())
-                .then_ignore(choice((just(Ident("payable")), just(Ident("nonpayable")))).or_not())
-                .or_not()
-                .ignore_then(just(Ident("returns")))
-                .ignore_then(sol_type_list())
-                .or_not(),
+            choice((
+                just(Ident("public")),
+                just(Ident("external")),
+                just(Ident("payable")),
+                just(Ident("nonpayable")),
+            ))
+            .or_not()
+            .then_ignore(choice((just(Ident("view")), just(Ident("pure")))).or_not())
+            .or_not()
+            .ignore_then(just(Ident("returns")))
+            .ignore_then(sol_type_list())
+            .or_not(),
         )
         .map(|((name, args), rets)| {
             let rets = rets.unwrap_or(Box::new([]));
@@ -317,58 +330,49 @@ fn sol_error<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Defini
 
 fn sol_type_list<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Box<[Spanned<DynSolType>]>>
 {
-    just(Punct('('))
-        .ignore_then(
-            sol_type()
-                .separated_by(just(Punct(',')))
-                .collect::<Vec<_>>(),
-        )
-        .then_ignore(just(Punct(')')))
+    sol_type()
+        .separated_by(punct(','))
+        .collect::<Vec<_>>()
+        .delimited_by(punct('('), punct(')'))
         .map(|args| args.into_boxed_slice())
 }
 
 fn sol_type<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Spanned<DynSolType>> {
     recursive(|sol_raw_type| {
-        let sol_raw_primitive_type = ident().map(|(typ, _)| typ.to_string()).boxed();
+        let sol_raw_primitive_type = ident().map(|(typ, _)| typ.to_string());
 
         let sol_raw_event_primitive_type = sol_raw_primitive_type
             .clone()
             .then_ignore(just(Ident("indexed")));
 
-        let sol_raw_tuple_type = just(Punct('('))
-            .ignore_then(
-                sol_raw_type
-                    .separated_by(just(Punct(',')))
-                    .collect::<Vec<_>>(),
-            )
-            .then_ignore(just(Punct(')')))
+        let sol_raw_tuple_type = sol_raw_type
+            .separated_by(punct(','))
+            .collect::<Vec<_>>()
+            .delimited_by(punct('('), punct(')'))
             .map(|types| {
                 let mut result = "(".to_string();
                 let types = types.into_iter().collect::<Vec<_>>().join(",");
                 result.push_str(&types);
                 result.push(')');
                 result
-            })
-            .boxed();
+            });
 
-        choice((
-            sol_raw_event_primitive_type,
-            sol_raw_primitive_type,
-            sol_raw_tuple_type,
-        ))
-        .then(
-            just(Punct('['))
-                .ignore_then(dec().or_not())
-                .then_ignore(just(Punct(']')))
-                .or_not(),
-        )
-        .then_ignore(ident().or_not())
-        .map(|(typ, slice)| {
-            let mut result = typ;
-            if let Some(size) = slice {
-                result.push('[');
-                if let Some((n, _span)) = size {
-                    result.push_str(&n.to_string());
+        choice((sol_raw_event_primitive_type, sol_raw_primitive_type, sol_raw_tuple_type))
+            .then(
+                punct('[')
+                    .ignore_then(dec().or_not())
+                    .then_ignore(punct(']'))
+                    .or_not(),
+            )
+            .then_ignore(ident().or_not())
+            .map(|(typ, slice)| {
+                let mut result = typ;
+                if let Some(size) = slice {
+                    result.push('[');
+                    if let Some((n, _span)) = size {
+                        result.push_str(&n.to_string());
+                    }
+                    result.push(']');
                 }
                 result.push(']');
             }
@@ -407,6 +411,10 @@ fn code<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Vec<u8>> {
     }
     .try_map_with(|code, ex| code.map_err(|_e| Rich::custom(ex.span(), "odd length")))
     .map(|code| code.to_vec())
+}
+
+fn punct<'tokens, 'src: 'tokens>(c: char) -> impl Parser<'tokens, 'src, Token<'src>> {
+    just(Punct(c))
 }
 
 #[cfg(test)]
@@ -494,15 +502,15 @@ mod tests {
 
         assert_ok!(
             root_section(),
-            vec![Keyword("include"), String("test")],
-            ast::RootSection::Include(("test", span))
+            vec![Keyword("include"), String("test".to_string())],
+            ast::RootSection::Include(("test".to_string(), span))
         );
         assert_ok!(
             root_section(),
             vec![Keyword("define"), Ident("constant"), Ident("TEST"), Punct('='), Hex("0x1")],
             ast::RootSection::Definition(ast::Definition::Constant {
                 name: ("TEST", span),
-                value: uint!(1_U256)
+                expr: (ast::ConstExpr::Value(uint!(1_U256)), span)
             })
         );
     }
@@ -523,7 +531,7 @@ mod tests {
             ],
             ast::Definition::Macro(ast::Macro {
                 name: ("MAIN", span),
-                args: Box::new([]),
+                args: (Box::new([]), span),
                 takes_returns: None,
                 body: Box::new([])
             })
@@ -551,7 +559,7 @@ mod tests {
             ],
             ast::Definition::Macro(ast::Macro {
                 name: ("READ_ADDRESS", span),
-                args: Box::new([("offset", span)]),
+                args: (Box::new([("offset", span)]), span),
                 takes_returns: Some(((0, span), (1, span))),
                 body: Box::new([ast::MacroStatement::Instruction(ast::Instruction::Op((
                     Opcode::STOP,
@@ -580,7 +588,10 @@ mod tests {
             vec![Ident("READ_ADDRESS"), Punct('('), Hex("0x4"), Punct(')')],
             ast::MacroStatement::Invoke(ast::Invoke::Macro {
                 name: ("READ_ADDRESS", span),
-                args: Box::new([ast::Instruction::Op((Opcode::PUSH1([0x04]), span))])
+                args: (
+                    Box::new([ast::Instruction::VariablePush((uint!(4U256), span))]),
+                    span
+                )
             })
         );
     }
@@ -597,7 +608,7 @@ mod tests {
         assert_ok!(
             instruction(),
             vec![Hex("0x1")],
-            ast::Instruction::Op((Opcode::PUSH1([0x01]), span))
+            ast::Instruction::VariablePush((uint!(1U256), span))
         );
         assert_ok!(
             instruction(),
@@ -622,7 +633,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_constant() {
+    fn parse_constant_value() {
         let span: Span = SimpleSpan::new(0, 0);
 
         assert_ok!(
@@ -630,7 +641,28 @@ mod tests {
             vec![Ident("constant"), Ident("TEST"), Punct('='), Hex("0x1")],
             ast::Definition::Constant {
                 name: ("TEST", span),
-                value: uint!(1_U256)
+                expr: (ast::ConstExpr::Value(uint!(1_U256)), span)
+            }
+        );
+    }
+
+    #[test]
+    fn parse_constant_storage_pointer() {
+        let span: Span = SimpleSpan::new(0, 0);
+
+        assert_ok!(
+            constant(),
+            vec![
+                Ident("constant"),
+                Ident("VAR_LOCATION"),
+                Punct('='),
+                Ident("FREE_STORAGE_POINTER"),
+                Punct('('),
+                Punct(')')
+            ],
+            ast::Definition::Constant {
+                name: ("VAR_LOCATION", span),
+                expr: (ast::ConstExpr::FreeStoragePointer, span)
             }
         );
     }

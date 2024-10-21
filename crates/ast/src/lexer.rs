@@ -2,7 +2,7 @@ use crate::Spanned;
 use chumsky::{
     error::Rich,
     extra,
-    primitive::{any, choice, just, one_of},
+    primitive::{any, choice, just, none_of, one_of},
     text::{self, ascii::keyword},
     IterParser, Parser,
 };
@@ -27,7 +27,7 @@ pub enum Token<'src> {
     Dec(&'src str),
     Hex(&'src str),
     Bin(&'src str),
-    String(&'src str),
+    String(String),
 
     Error(char),
 }
@@ -40,8 +40,8 @@ impl fmt::Display for Token<'_> {
             | Token::Ident(s)
             | Token::Dec(s)
             | Token::Hex(s)
-            | Token::Bin(s)
-            | Token::String(s) => write!(f, "{}", s),
+            | Token::Bin(s) => write!(f, "{}", s),
+            Token::String(s) => write!(f, "{}", s),
             Token::Punct(c) | Token::Error(c) => write!(f, "{}", c),
         }
     }
@@ -54,7 +54,7 @@ fn lexer<'src>(
         .rewind()
         .validate(|c: Option<char>, e, emitter| {
             if let Some(c) = c {
-                if !(c.is_whitespace() || "(){[]<>:=,/}".contains(c)) {
+                if !(c.is_whitespace() || "(){}[]<>:=,/".contains(c)) {
                     emitter.emit(Rich::custom(e.span(), "invalid token"));
                 }
             }
@@ -85,10 +85,12 @@ fn lexer<'src>(
         .to_slice()
         .map(Token::Dec);
 
-    let string = just("\"")
-        .ignore_then(any().and_is(just("\"").not()).repeated().to_slice())
-        .then_ignore(just("\""))
-        .map(Token::String);
+    let string = none_of("\\\"")
+        .or(just('\\').ignore_then(just('"')))
+        .repeated()
+        .to_slice()
+        .map(|s: &str| Token::String(s.to_string().replace("\\\"", "\"")))
+        .delimited_by(just('"'), just('"'));
 
     let token = choice((keyword, ident, punct, hex, bin, dec, string));
 
@@ -195,11 +197,21 @@ mod tests {
 
     #[test]
     fn lex_string() {
-        assert_ok!("\"\"", (Token::String(""), SimpleSpan::new(0, 2)));
-        assert_ok!("\"foo\"", (Token::String("foo"), SimpleSpan::new(0, 5)));
+        assert_ok!(
+            "\"\"",
+            (Token::String("".to_string()), SimpleSpan::new(0, 2))
+        );
+        assert_ok!(
+            "\"\\\"\"",
+            (Token::String("\"".to_string()), SimpleSpan::new(0, 4))
+        );
+        assert_ok!(
+            "\"foo\"",
+            (Token::String("foo".to_string()), SimpleSpan::new(0, 5))
+        );
         assert_ok!(
             "\"foo bar\"",
-            (Token::String("foo bar"), SimpleSpan::new(0, 9))
+            (Token::String("foo bar".to_string()), SimpleSpan::new(0, 9))
         );
     }
 }

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/ast", "crates/cli"]
+members = ["crates/analysis", "crates/ast", "crates/cli", "crates/compilation"]
 
 [workspace.package]
 version = "0.0.1"
@@ -11,14 +11,15 @@ license = "MIT"
 
 # workspace
 huff-ast = { path = "crates/ast" }
+huff-analysis = { path = "crates/analysis" }
+huff-compilation = { path = "crates/compilation" }
 
 alloy-dyn-abi = "0.8"
 alloy-primitives = "0.8"
 ariadne = { version = "0.4.1", features = ["auto-color"] }
-argh = "0.1"
+clap = { version = "4.5.20", features = ["derive"] }
 evm-glue = { git = "https://github.com/Philogy/evm-glue.git", rev = "b51f6a0" }
 chumsky = { git = "https://github.com/zesterer/chumsky.git", rev = "716bec8" }
-thiserror = "1"
 
 [profile.profiling]
 inherits = "release"
