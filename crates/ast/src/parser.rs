@@ -820,6 +820,22 @@ mod tests {
                 rets: Box::new([(DynSolType::parse("uint256").unwrap(), span)]),
             })
         );
+        assert_err!(
+            sol_function(),
+            vec![
+                Ident("function"),
+                Ident("balanceOf"),
+                Punct('('),
+                Ident("address"),
+                Ident("indexed"),
+                Punct(')'),
+                Ident("returns"),
+                Punct('('),
+                Ident("uint256"),
+                Punct(')')
+            ],
+            "word overflows"
+        );
     }
 
     #[test]
@@ -855,10 +871,14 @@ mod tests {
                 Punct('('),
                 Ident("address"),
                 Ident("indexed"),
+                Ident("sender"),
                 Punct(','),
                 Ident("address"),
+                Ident("indexed"),
+                Ident("recipient"),
                 Punct(','),
                 Ident("uint256"),
+                Ident("amount"),
                 Punct(')')
             ],
             ast::Definition::SolEvent(ast::SolEvent {
