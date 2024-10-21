@@ -847,11 +847,6 @@ mod tests {
                 ]),
             })
         );
-    }
-
-    #[test]
-    fn parse_sol_event_indexed() {
-        let span: Span = SimpleSpan::new(0, 0);
         assert_ok!(
             sol_event(),
             vec![
