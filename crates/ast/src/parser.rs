@@ -816,6 +816,34 @@ mod tests {
     }
 
     #[test]
+    fn parse_sol_event_indexed() {
+        let span: Span = SimpleSpan::new(0, 0);
+        assert_ok!(
+            sol_event(),
+            vec![
+                Ident("event"),
+                Ident("Transfer"),
+                Punct('('),
+                Ident("address"),
+                Ident("indexed"),
+                Punct(','),
+                Ident("address"),
+                Punct(','),
+                Ident("uint256"),
+                Punct(')')
+            ],
+            ast::Definition::SolEvent(ast::SolEvent {
+                name: ("Transfer", span),
+                args: Box::new([
+                    (DynSolType::parse("address").unwrap(), span),
+                    (DynSolType::parse("address").unwrap(), span),
+                    (DynSolType::parse("uint256").unwrap(), span),
+                ]),
+            })
+        );
+    }
+
+    #[test]
     fn parse_sol_error() {
         let span: Span = SimpleSpan::new(0, 0);
 
