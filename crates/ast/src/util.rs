@@ -1,8 +1,8 @@
-use alloy_primitives::{U256,FixedBytes, keccak256};
+use crate::ast::{SolError, SolFunction};
 use crate::Spanned;
 use alloy_dyn_abi::DynSolType;
+use alloy_primitives::{keccak256, FixedBytes, U256};
 use evm_glue::opcodes::Opcode;
-use crate::ast::{SolError, SolFunction};
 
 pub(crate) fn u256_as_push_data<const N: usize>(value: U256) -> Result<[u8; N], String> {
     if value.byte_len() > N {
@@ -56,46 +56,41 @@ pub fn u256_as_push(value: U256) -> Opcode {
         _ => unreachable!(),
     }
 }
+
 type Selector = (FixedBytes<4>, FixedBytes<4>);
 
+pub fn compute_selector(
+    func: SolFunction,
+    err: SolError,
+) -> Option<(FixedBytes<4>, FixedBytes<4>)> {
+    let build_signature = |name: &Spanned<&str>, args: &Box<[Spanned<DynSolType>]>| -> Vec<u8> {
+        let arg_types: Vec<_> = args
+            .iter()
+            .map(|arg| match arg.0 {
+                DynSolType::Address => "address",
+                DynSolType::Uint(_) => "uint256",
+                DynSolType::String => "string",
+                _ => panic!("Unsupported type: {:?}", arg.0),
+            })
+            .collect();
 
-pub fn build_signature(func_name: &Spanned<&str>, args: &Box<[Spanned<DynSolType>]>) -> Vec<u8> {
-    let mut arg_types = Vec::new();
+        let mut signature = String::new();
+        signature.push_str(name.0);
+        signature.push('(');
+        signature.push_str(&arg_types.join(","));
+        signature.push(')');
+        signature.into_bytes()
+    };
 
-
-    for arg in args.iter() {
-        let arg_type = match arg.0 {
-            DynSolType::Address => "address",
-            DynSolType::Uint(_) => "uint256",
-            DynSolType::String => "string",
-            _ => panic!("Unsupported type: {:?}", arg.0),
+    let build_selector =
+        |name: &Spanned<&str>, args: &Box<[Spanned<DynSolType>]>| -> FixedBytes<4> {
+            let signature = build_signature(name, args);
+            let hash = keccak256(signature);
+            FixedBytes::<4>::from_slice(&hash[..4])
         };
-        arg_types.push(arg_type);
-    }
 
-    // Build the signature using a String
-    let mut signature = String::new();
-    signature.push_str(func_name.0);
-    signature.push('(');
-    signature.push_str(&arg_types.join(","));
-    signature.push(')');
-
-    // Convert the signature String to Vec<u8>
-    signature.into_bytes()
-}
-
-
-
-pub fn compute_selector(func: SolFunction, err: SolError) -> Option<Selector> {
-    let func_signature = build_signature(&func.name, &func.args);
-    let err_signature = build_signature(&err.name, &err.args);
-
-    let func_hash = keccak256(func_signature);
-    let err_hash = keccak256(err_signature);
-
-
-    let func_selector: FixedBytes<4> = FixedBytes::from_slice(&func_hash[..4]);
-    let err_selector: FixedBytes<4> = FixedBytes::from_slice(&err_hash[..4]);
+    let func_selector = build_selector(&func.name, &func.args);
+    let err_selector = build_selector(&err.name, &err.args);
 
     Some((func_selector, err_selector))
 }
@@ -104,12 +99,9 @@ pub fn compute_selector(func: SolFunction, err: SolError) -> Option<Selector> {
 mod tests {
     use super::*;
     use crate::ast::*;
-    use alloy_primitives::keccak256;
     use alloy_dyn_abi::DynSolType;
+    use alloy_primitives::keccak256;
     use chumsky::span::Span;
-
-
-
 
     #[test]
     fn test_compute_selector() {
@@ -129,14 +121,14 @@ mod tests {
             ]),
         };
         let selectors = compute_selector(func.clone(), err.clone()).unwrap();
-        let func_signature = build_signature(&Spanned::new("transfer", 0..8), &func.args);
-        let err_signature = build_signature(&Spanned::new("TransferFailed", 0..15), &err.args);
-        let expected_func_hash = keccak256(func_signature.clone());
-        let expected_err_hash = keccak256(err_signature.clone());
+        let expected_func_hash = keccak256(selectors.0.clone());
+        let expected_err_hash = keccak256(selectors.1.clone());
         //println!("{}", &selectors);
-        let expected_func_selector: Selector = (FixedBytes::from_slice(&expected_func_hash[..4]), FixedBytes::from_slice(&expected_err_hash[..4]));
+        let expected_func_selector: Selector = (
+            FixedBytes::from_slice(&expected_func_hash[..4]),
+            FixedBytes::from_slice(&expected_err_hash[..4]),
+        );
         assert_eq!(selectors.0, expected_func_selector.0);
         assert_eq!(selectors.1, expected_func_selector.1);
     }
 }
-
