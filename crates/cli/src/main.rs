@@ -1,9 +1,9 @@
 use ariadne::{sources, Color, Config, Fmt, IndexType, Label, Report, ReportKind};
 use clap::Parser as ClapParser;
-use evm_glue::{assemble_minimized, utils::MarkTracker};
+use evm_glue::{assemble_maximized, assemble_minimized, utils::MarkTracker};
 use huff_analysis::*;
 use huff_ast::{parse, RootSection};
-use huff_compilation::{evalute_constants, generate_for_entrypoint, CompileGlobals};
+use huff_compilation::{generate_default_constructor, generate_for_entrypoint, CompileGlobals};
 
 mod versions;
 use versions::EvmVersion;
@@ -15,32 +15,16 @@ struct Cli {
     #[clap(help = "Root huff file to compile")]
     filename: String,
 
+    #[clap(help = "Entrypoint to compile to huff")]
+    entry_point: String,
+
     #[clap(
-        short = 'm',
-        long = "alt-main",
-        default_value = "MAIN",
-        help = "alternative entry point for runtime execution"
+        short = 'f',
+        long = "default-constructor",
+        help = "whether to wrap target entry point code in a minimal constructor"
     )]
-    main: String,
-    #[clap(
-        short = 't',
-        long = "alt-constructor",
-        default_value = "CONSTRUCTOR",
-        help = "entry point for constructor (initcode) execution"
-    )]
-    constructor: String,
-    #[clap(
-        short = 'b',
-        long = "bytecode",
-        help = "Generate and log constructor bytecode (aka initcode)"
-    )]
-    initcode: bool,
-    #[clap(
-        short = 'r',
-        long = "runtime",
-        help = "Generate and log runtime bytecode"
-    )]
-    runtime: bool,
+    add_default_constructor: bool,
+
     #[clap(
         short = 'e',
         long = "evm-version",
@@ -48,6 +32,14 @@ struct Cli {
         default_value = "paris"
     )]
     evm_version: EvmVersion,
+
+    #[clap(
+        short = 'z',
+        long = "optimize",
+        help = "Whether to optimize the resulting assembly. NOTE: Currently only toggles minimization of push opcodes for label references",
+        default_value_t = true
+    )]
+    optimize: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -112,7 +104,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }));
     let unique_defs = analyze_global_for_dups(&global_defs, |err| analysis_errors.push(err));
 
-    let main_macro = analyze_entry_point(&global_defs, cli.main.as_str(), |err| {
+    let entry_point_macro = analyze_entry_point(&global_defs, cli.entry_point.as_str(), |err| {
         analysis_errors.push(err)
     });
 
@@ -126,15 +118,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut mtracker = MarkTracker::default();
-    let config = {
-        let constants = evalute_constants(&unique_defs);
-        CompileGlobals {
-            allow_push0: cli.evm_version.allows_push0(),
-            defs: unique_defs,
-            constants,
-        }
-    };
-    let asm = match generate_for_entrypoint(&config, main_macro.unwrap(), &mut mtracker) {
+    let config = CompileGlobals::new(cli.evm_version.allows_push0(), unique_defs);
+
+    let asm = match generate_for_entrypoint(&config, entry_point_macro.unwrap(), &mut mtracker) {
         Ok(asm) => asm,
         Err(reason) => {
             eprintln!("{}: {}", "Error".fg(Color::Red), reason);
@@ -142,9 +128,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let code = assemble_minimized(asm.as_slice(), config.allow_push0).unwrap();
+    let assemble = if cli.optimize {
+        assemble_minimized
+    } else {
+        assemble_maximized
+    };
 
-    println!("runtime: 0x{}", hex::encode(code));
+    let (_, mut entry_point_code) = assemble(asm.as_slice(), config.allow_push0).unwrap();
+
+    if cli.add_default_constructor {
+        (_, entry_point_code) = assemble(
+            &generate_default_constructor(entry_point_code),
+            config.allow_push0,
+        )
+        .unwrap();
+    }
+
+    println!("0x{}", hex::encode(entry_point_code));
 
     Ok(())
 }
