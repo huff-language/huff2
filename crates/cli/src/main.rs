@@ -15,7 +15,9 @@ struct Cli {
     #[clap(help = "Root huff file to compile")]
     filename: String,
 
-    #[clap(help = "Entrypoint to compile to huff")]
+    #[clap(
+        help = "Name of Huff entrypoint macro to compile to EVM bytecode. NOTE: Will compile the entry point *as is*, no implicit initcode wrapper."
+    )]
     entry_point: String,
 
     #[clap(
