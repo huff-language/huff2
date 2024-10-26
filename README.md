@@ -18,6 +18,26 @@ in Rust. It comes with:
 - ABI builtins (`__FUNC_SIG`, `__EVEN_HASH`, `__ERROR`)
 - Macro code inclusion builtins (`__codesize`, `__codeoffset`)
 
+## Why rewrite `huff-rs`?
+
+The [`huff-rs`](https://github.com/huff-language/huff-rs) compiler was a passion project by pioneers
+in the Huff community who aimed to create a better version of Zac's
+[original typescript implementation](https://github.com/AztecProtocol/huff).
+
+The initial developers of `huff-rs` were relatively new to compilers, choosing to write some of the
+components like the lexer, parser & assembler themselves while adding novel compiler features like
+the Huff testing framework that unfortunately didn't see a lot of usage.
+
+Combined with a lot of the tech debt that accrued from the early days made us decide that it was
+best to start fresh, using existing libraries to do as much of the heavy lifting as possible:
+- [`chumsky`](https://github.com/zesterer/chumsky/) for lexing & parsing
+- [`ariadne`](https://github.com/zesterer/ariadne) for pretty errors
+- [`evm-glue`](https://github.com/philogy/evm-glue) for EVM assembly
+- [`alloy`](https://alloy.rs/) for ABI types & parsing
+
+This new foundation will allow bugs to be fixed more easily as well as allowing us to experiment
+with our own novel compiler features. 😁
+
 ## Differences vs. `huff-rs`
 ### CLI Changes
 The `-b`, `--bytecode`, `-r`, `--bin-runtime`, `-m`, `--alt-main`, `-t`, `--alt-constructor` have
@@ -42,7 +62,10 @@ These errors were serious footguns that could easily go unnoticed when using the
 
 ### New Label & Jump Table Semantics
 
-1. **Up Only**: Macros can only reference labels defined within them or the parents invoking them:
+1. **Up Only**: Macros can only reference labels defined within them or the parents invoking them
+2. **Shadowing:** Label definitions deeper down in a chain of invocations shadows previous definitions
+
+**Examples:**
 
 References resolve to the labels defined within the same macro:
 
@@ -100,9 +123,8 @@ Resolution **does not** go down into invoked macros:
 }
 ```
 
-2. **Shadowing:** Label definitions deeper down in a chain of invocations shadows previous
-   definitions:
-
+As you go down an invocation chain label definitions are added to a stack where the highest most
+definition is resolved by references.
 
 ```
 #define macro MAIN() = takes(0) returns(0) {
