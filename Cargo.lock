@@ -763,7 +763,7 @@ dependencies = [
 [[package]]
 name = "evm-glue"
 version = "0.1.0"
-source = "git+https://github.com/Philogy/evm-glue.git?rev=b51f6a0#b51f6a0e41f9eaef7e4e070c19c113fd4117e71e"
+source = "git+https://github.com/Philogy/evm-glue.git?rev=d0186623#d01866236874879d79a7a371a7ceddf5fdf823b0"
 dependencies = [
  "hex",
  "hex-literal",

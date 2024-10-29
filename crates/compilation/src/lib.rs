@@ -24,6 +24,26 @@ pub fn generate_for_entrypoint<'src>(
     Ok(asm)
 }
 
+pub fn generate_default_constructor(runtime: Vec<u8>) -> Box<[Asm]> {
+    let mut mtracker = MarkTracker::default();
+    let runtime_start = mtracker.next_mark();
+    let runtime_end = mtracker.next_mark();
+    Box::new([
+        // Constructor
+        Asm::delta_ref(runtime_start, runtime_end), // rt_size
+        Asm::Op(Opcode::DUP1),                      // rt_size, rt_size
+        Asm::mref(runtime_start),                   // rt_size, rt_size, rt_start
+        Asm::Op(Opcode::RETURNDATASIZE),            // rt_size, rt_size, rt_start, 0
+        Asm::Op(Opcode::CODECOPY),                  // rt_size
+        Asm::Op(Opcode::RETURNDATASIZE),            // rt_size, 0
+        Asm::Op(Opcode::RETURN),                    // -- end
+        // Runtime body
+        Asm::Mark(runtime_start),
+        Asm::Data(runtime),
+        Asm::Mark(runtime_end),
+    ])
+}
+
 fn generate_for_macro<'src: 'cmp, 'cmp>(
     globals: &CompileGlobals<'src, '_>,
     current: &Macro<'src>,
@@ -49,50 +69,48 @@ fn generate_for_macro<'src: 'cmp, 'cmp>(
         }
     });
 
-    current.body.iter().try_for_each(|stmt| {
-        match stmt {
-            MacroStatement::LabelDefinition(name) => {
-                asm.extend([
-                    Asm::Mark(*label_stack.get(name.ident()).unwrap()),
-                    Asm::Op(Opcode::JUMPDEST),
-                ]);
-            }
-            MacroStatement::Invoke(invoke) => match invoke {
-                Invoke::Macro { name, args } => {
-                    let target = if let Definition::Macro(target) =
-                        globals.defs.get(name.ident()).unwrap()
-                    {
+    let res = current.body.iter().try_for_each(|stmt| match stmt {
+        MacroStatement::LabelDefinition(name) => {
+            asm.extend([
+                Asm::Mark(*label_stack.get(name.ident()).unwrap()),
+                Asm::Op(Opcode::JUMPDEST),
+            ]);
+            Ok(())
+        }
+        MacroStatement::Invoke(invoke) => match invoke {
+            Invoke::Macro { name, args } => {
+                let target =
+                    if let Definition::Macro(target) = globals.defs.get(name.ident()).unwrap() {
                         target
                     } else {
                         panic!("Target should've been validated to be macro")
                     };
-                    generate_for_macro(
-                        globals,
-                        target,
-                        args.0
-                            .iter()
-                            .map(|arg| instruction_to_asm(globals, &current_args, label_stack, arg))
-                            .collect::<Result<_, String>>()?,
-                        mark_tracker,
-                        label_stack,
-                        asm,
-                    )?;
-                }
-                _ => Err(format!(
-                    "Compilation not yet implemented for this invocation type `{:?}`",
-                    invoke
-                ))?,
-            },
-            MacroStatement::Instruction(i) => {
-                asm.push(instruction_to_asm(globals, &current_args, label_stack, i)?)
+                generate_for_macro(
+                    globals,
+                    target,
+                    args.0
+                        .iter()
+                        .map(|arg| instruction_to_asm(globals, &current_args, label_stack, arg))
+                        .collect(),
+                    mark_tracker,
+                    label_stack,
+                    asm,
+                )
             }
-        };
-        Result::<(), String>::Ok(())
-    })?;
+            _ => Err(format!(
+                "Compilation not yet implemented for this invocation type `{:?}`",
+                invoke
+            )),
+        },
+        MacroStatement::Instruction(i) => {
+            asm.push(instruction_to_asm(globals, &current_args, label_stack, i));
+            Ok(())
+        }
+    });
 
     label_stack.leave_context();
 
-    Ok(())
+    res
 }
 
 fn instruction_to_asm(
@@ -100,20 +118,20 @@ fn instruction_to_asm(
     args: &BTreeMap<&str, Asm>,
     label_stack: &LabelStack<usize>,
     i: &Instruction,
-) -> Result<Asm, String> {
+) -> Asm {
     match i {
-        Instruction::Op((op, _)) => Ok(Asm::Op(*op)),
-        Instruction::VariablePush((value, _)) => Ok(u256_to_asm(*value, globals.allow_push0)),
-        Instruction::LabelReference(name) => Ok(Asm::mref(*label_stack.get(name.ident()).unwrap())),
-        Instruction::ConstantReference(name) => Ok(u256_to_asm(
+        Instruction::Op((op, _)) => Asm::Op(*op),
+        Instruction::VariablePush((value, _)) => u256_to_asm(*value, globals.allow_push0),
+        Instruction::LabelReference(name) => Asm::mref(*label_stack.get(name.ident()).unwrap()),
+        Instruction::ConstantReference(name) => u256_to_asm(
             *globals.constants.get(name.ident()).unwrap(),
             globals.allow_push0,
-        )),
-        Instruction::MacroArgReference(name) => Ok(args.get(name.ident()).unwrap().clone()),
+        ),
+        Instruction::MacroArgReference(name) => args.get(name.ident()).unwrap().clone(),
     }
 }
 
-fn u256_to_asm(value: U256, allow_push0: bool) -> Asm {
+pub fn u256_to_asm(value: U256, allow_push0: bool) -> Asm {
     Asm::Op(if value.byte_len() == 0 && allow_push0 {
         Opcode::PUSH0
     } else {
@@ -124,13 +142,22 @@ fn u256_to_asm(value: U256, allow_push0: bool) -> Asm {
 #[derive(Debug, Clone)]
 pub struct CompileGlobals<'src, 'ast> {
     pub allow_push0: bool,
-    pub defs: BTreeMap<&'src str, &'src Definition<'ast>>,
+    pub defs: BTreeMap<&'src str, &'ast Definition<'src>>,
     pub constants: BTreeMap<&'src str, U256>,
 }
 
-pub fn evalute_constants<'a>(
-    global_defs: &BTreeMap<&'a str, &Definition>,
-) -> BTreeMap<&'a str, U256> {
+impl<'src, 'ast> CompileGlobals<'src, 'ast> {
+    pub fn new(allow_push0: bool, defs: BTreeMap<&'src str, &'ast Definition<'src>>) -> Self {
+        let constants = evalute_constants(&defs);
+        Self {
+            allow_push0,
+            defs,
+            constants,
+        }
+    }
+}
+
+fn evalute_constants<'a>(global_defs: &BTreeMap<&'a str, &Definition>) -> BTreeMap<&'a str, U256> {
     let mut free_pointer = 0u32;
     global_defs
         .iter()
