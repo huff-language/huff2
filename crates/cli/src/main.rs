@@ -120,9 +120,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut mtracker = MarkTracker::default();
-    let config = CompileGlobals::new(cli.evm_version.allows_push0(), unique_defs);
+    let mut config = CompileGlobals::new(cli.evm_version.allows_push0(), unique_defs);
 
-    let asm = match generate_for_entrypoint(&config, entry_point_macro.unwrap(), &mut mtracker) {
+    let asm = match generate_for_entrypoint(&mut config, entry_point_macro.unwrap(), &mut mtracker)
+    {
         Ok(asm) => asm,
         Err(reason) => {
             eprintln!("{}: {}", "Error".fg(Color::Red), reason);
