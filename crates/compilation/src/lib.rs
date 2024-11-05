@@ -5,7 +5,7 @@ use huff_ast::*;
 use std::collections::BTreeMap;
 
 pub fn generate_for_entrypoint<'src>(
-    globals: &CompileGlobals<'src, '_>,
+    globals: &mut CompileGlobals<'src, '_>,
     entry_point: &Macro<'src>,
     mark_tracker: &mut MarkTracker,
 ) -> Result<Vec<Asm>, String> {
@@ -45,7 +45,7 @@ pub fn generate_default_constructor(runtime: Vec<u8>) -> Box<[Asm]> {
 }
 
 fn generate_for_macro<'src: 'cmp, 'cmp>(
-    globals: &CompileGlobals<'src, '_>,
+    globals: &mut CompileGlobals<'src, '_>,
     current: &Macro<'src>,
     arg_values: Box<[Asm]>,
     mark_tracker: &mut MarkTracker,
@@ -87,7 +87,7 @@ fn generate_for_macro<'src: 'cmp, 'cmp>(
                     };
                 generate_for_macro(
                     globals,
-                    target,
+                    &target,
                     args.0
                         .iter()
                         .map(|arg| instruction_to_asm(globals, &current_args, label_stack, arg))
@@ -102,7 +102,7 @@ fn generate_for_macro<'src: 'cmp, 'cmp>(
                 invoke
             )),
         },
-        MacroStatement::Instruction(i) => {
+        MacroStatement::Instruction(ref i) => {
             asm.push(instruction_to_asm(globals, &current_args, label_stack, i));
             Ok(())
         }
@@ -140,10 +140,18 @@ pub fn u256_to_asm(value: U256, allow_push0: bool) -> Asm {
 }
 
 #[derive(Debug, Clone)]
+pub struct IncludedMacro {
+    start_id: usize,
+    end_id: usize,
+    code: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
 pub struct CompileGlobals<'src, 'ast> {
     pub allow_push0: bool,
     pub defs: BTreeMap<&'src str, &'ast Definition<'src>>,
     pub constants: BTreeMap<&'src str, U256>,
+    pub referenced_macros: BTreeMap<&'src str, IncludedMacro>,
 }
 
 impl<'src, 'ast> CompileGlobals<'src, 'ast> {
@@ -153,6 +161,7 @@ impl<'src, 'ast> CompileGlobals<'src, 'ast> {
             allow_push0,
             defs,
             constants,
+            referenced_macros: BTreeMap::new(),
         }
     }
 }

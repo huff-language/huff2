@@ -220,12 +220,14 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                     }
                 }
                 Invoke::BuiltinCodeSize(code_ref) | Invoke::BuiltinCodeOffset(code_ref) => {
+                    let mut no_error = true;
                     if !global_exists!(self.global_defs, code_ref.ident(), Definition::Macro(_)) {
                         self.emit(AnalysisError::DefinitionNotFound {
                             scope: self.m,
                             def_type: "macro",
                             not_found: code_ref,
-                        })
+                        });
+                        no_error = false;
                     }
                     if self
                         .global_defs
@@ -240,7 +242,14 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                         self.emit(AnalysisError::NotYetSupported {
                             intent: "code introspection for macros with arguments".to_owned(),
                             span: ((), code_ref.1),
-                        })
+                        });
+                        no_error = false;
+                    }
+                    let mut inner_errors = Vec::new();
+                    if no_error {
+                        analyze_entry_point(self.global_defs, code_ref.ident(), |err| {
+                            inner_errors.push(err)
+                        });
                     }
                 }
                 Invoke::BuiltinFuncSig(func_or_error_ref)
