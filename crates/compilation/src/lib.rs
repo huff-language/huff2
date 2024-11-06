@@ -140,7 +140,7 @@ fn generate_for_macro<'src: 'cmp, 'cmp>(
                     };
                 generate_for_macro(
                     globals,
-                    &target,
+                    target,
                     args.0
                         .iter()
                         .map(|arg| instruction_to_asm(globals, &current_args, label_stack, arg))
@@ -152,10 +152,8 @@ fn generate_for_macro<'src: 'cmp, 'cmp>(
                 )
             }
             Invoke::BuiltinCodeSize(code_ref) => {
-                let mref: MarkRef = if let Some(included) = included_macros
-                    .iter()
-                    .filter(|m| m.name == code_ref.ident())
-                    .next()
+                let mref: MarkRef = if let Some(included) =
+                    included_macros.iter().find(|m| m.name == code_ref.ident())
                 {
                     included.size_ref()
                 } else {
@@ -173,10 +171,8 @@ fn generate_for_macro<'src: 'cmp, 'cmp>(
                 asm.push(Asm::Ref(mref));
             }
             Invoke::BuiltinCodeOffset(code_ref) => {
-                let mref: MarkRef = if let Some(included) = included_macros
-                    .iter()
-                    .filter(|m| m.name == code_ref.ident())
-                    .next()
+                let mref: MarkRef = if let Some(included) =
+                    included_macros.iter().find(|m| m.name == code_ref.ident())
                 {
                     included.start_ref()
                 } else {
