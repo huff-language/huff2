@@ -1,6 +1,5 @@
 use ariadne::{sources, Color, Config, Fmt, IndexType, Label, Report, ReportKind};
 use clap::Parser as ClapParser;
-use evm_glue::{assemble_maximized, assemble_minimized, utils::MarkTracker};
 use huff_analysis::*;
 use huff_ast::{parse, RootSection};
 use huff_compilation::{generate_default_constructor, generate_for_entrypoint, CompileGlobals};
