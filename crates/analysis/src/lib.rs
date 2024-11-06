@@ -30,7 +30,8 @@ pub fn analyze_entry_point<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)
     global_defs: &BTreeMap<&'src str, Vec<&'ast Definition<'src>>>,
     entry_point_name: &'src str,
     mut emit_error: E,
-) -> Option<&'ast Macro<'src>> {
+    macros_to_analyze: &mut Vec<&'src str>,
+) {
     let mut invoke_stack = Vec::with_capacity(32);
     let mut label_stack = LabelStack::default();
 
@@ -43,7 +44,7 @@ pub fn analyze_entry_point<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)
         emit_error(AnalysisError::EntryPointNotFound {
             name: entry_point_name,
         });
-        return None;
+        return;
     };
 
     if entry_point.args.0.len() != 0 {
@@ -58,9 +59,8 @@ pub fn analyze_entry_point<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)
         &mut label_stack,
         &mut invoke_stack,
         &mut emit_error,
+        macros_to_analyze,
     );
-
-    Some(entry_point)
 }
 
 macro_rules! global_exists {
@@ -83,6 +83,7 @@ struct MacroAnalysis<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> 
     label_stack: &'a mut LabelStack<'src, ()>,
     invoke_stack: &'a mut Vec<(&'ast Macro<'src>, &'ast Spanned<&'src str>)>,
     emit_error: &'a mut E,
+    macros_to_analyze: &'a mut Vec<&'src str>,
 }
 
 impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a, 'src, 'ast, E> {
@@ -96,6 +97,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
         label_stack: &'a mut LabelStack<'src, ()>,
         invoke_stack: &'a mut Vec<(&'ast Macro<'src>, &'ast Spanned<&'src str>)>,
         emit_error: &'a mut E,
+        macros_to_analyze: &mut Vec<&'src str>,
     ) {
         MacroAnalysis {
             global_defs,
@@ -103,6 +105,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
             label_stack,
             invoke_stack,
             emit_error,
+            macros_to_analyze,
         }
         .analyze();
     }
@@ -202,6 +205,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                                 self.label_stack,
                                 self.invoke_stack,
                                 self.emit_error,
+                                self.macros_to_analyze,
                             );
                         });
                     self.invoke_stack.pop().unwrap();
@@ -218,16 +222,19 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                             not_found: table_ref,
                         })
                     }
+
+                    self.emit(AnalysisError::NotYetSupported {
+                        intent: "__tablesize and __tableoffset".to_string(),
+                        span: ((), table_ref.1),
+                    });
                 }
                 Invoke::BuiltinCodeSize(code_ref) | Invoke::BuiltinCodeOffset(code_ref) => {
-                    let mut no_error = true;
                     if !global_exists!(self.global_defs, code_ref.ident(), Definition::Macro(_)) {
                         self.emit(AnalysisError::DefinitionNotFound {
                             scope: self.m,
                             def_type: "macro",
                             not_found: code_ref,
                         });
-                        no_error = false;
                     }
                     if self
                         .global_defs
@@ -243,14 +250,8 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                             intent: "code introspection for macros with arguments".to_owned(),
                             span: ((), code_ref.1),
                         });
-                        no_error = false;
                     }
-                    let mut inner_errors = Vec::new();
-                    if no_error {
-                        analyze_entry_point(self.global_defs, code_ref.ident(), |err| {
-                            inner_errors.push(err)
-                        });
-                    }
+                    self.macros_to_analyze.push(code_ref.ident());
                 }
                 Invoke::BuiltinFuncSig(func_or_error_ref)
                 | Invoke::BuiltinError(func_or_error_ref) => {
@@ -265,6 +266,11 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                             not_found: func_or_error_ref,
                         })
                     }
+
+                    self.emit(AnalysisError::NotYetSupported {
+                        intent: "__FUNC_SIG and __ERROR".to_string(),
+                        span: ((), func_or_error_ref.1),
+                    });
                 }
                 Invoke::BuiltinEventHash(event_ref) => {
                     if !global_exists!(self.global_defs, event_ref.ident(), Definition::SolEvent(_))
@@ -275,6 +281,11 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                             not_found: event_ref,
                         })
                     }
+
+                    self.emit(AnalysisError::NotYetSupported {
+                        intent: "__EVENT_HASH".to_string(),
+                        span: ((), event_ref.1),
+                    });
                 }
             },
         });
@@ -360,6 +371,7 @@ mod test {
             &build_ident_map(defs.into_iter()),
             entry_point_name,
             |err| emitted.push(err.clone()),
+            &mut Vec::new(),
         );
         assert_eq!(errors.to_vec(), emitted, "expected == emitted");
     }
