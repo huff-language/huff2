@@ -1,5 +1,5 @@
 #define macro MAIN(a, skbidi) = takes(0) returns(0) {
-    WOW(0x1, 0x2)
+    WOW(0x1)
     WOW(0x1, 0x2, 0x3)
 }
 

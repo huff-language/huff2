@@ -1,0 +1,5 @@
+#include "./Recursive.huff"
+
+#define macro MAIN() = takes(0) returns(0) {
+    // wow
+}
