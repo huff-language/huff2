@@ -4,6 +4,7 @@ use evm_glue::{assemble_maximized, assemble_minimized, utils::MarkTracker};
 use huff_analysis::*;
 use huff_ast::{parse, RootSection};
 use huff_compilation::{generate_default_constructor, generate_for_entrypoint, CompileGlobals};
+use std::collections::BTreeSet;
 
 mod versions;
 use versions::EvmVersion;
@@ -106,9 +107,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }));
     let unique_defs = analyze_global_for_dups(&global_defs, |err| analysis_errors.push(err));
 
-    let entry_point_macro = analyze_entry_point(&global_defs, cli.entry_point.as_str(), |err| {
-        analysis_errors.push(err)
-    });
+    {
+        let mut to_analyze_stack = vec![cli.entry_point.as_str()];
+        let mut analyzed_macros = BTreeSet::new();
+        while let Some(next_entrypoint) = to_analyze_stack.pop() {
+            if analyzed_macros.insert(next_entrypoint) {
+                analyze_entry_point(
+                    &global_defs,
+                    next_entrypoint,
+                    |err| analysis_errors.push(err),
+                    &mut to_analyze_stack,
+                );
+            }
+        }
+    }
 
     if !analysis_errors.is_empty() {
         analysis_errors.into_iter().for_each(|err| {
@@ -119,32 +131,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     }
 
-    let mut mtracker = MarkTracker::default();
-    let mut config = CompileGlobals::new(cli.evm_version.allows_push0(), unique_defs);
+    let mut config = CompileGlobals::new(cli.optimize, cli.evm_version.allows_push0(), unique_defs);
 
-    let asm = match generate_for_entrypoint(&mut config, entry_point_macro.unwrap(), &mut mtracker)
-    {
-        Ok(asm) => asm,
-        Err(reason) => {
-            eprintln!("{}: {}", "Error".fg(Color::Red), reason);
-            std::process::exit(1);
-        }
+    let entry_point_macro = match config.defs.get(cli.entry_point.as_str()) {
+        Some(huff_ast::Definition::Macro(entry_point)) => entry_point,
+        _ => panic!("macro not found despite no errors in analysis"),
     };
-
-    let assemble = if cli.optimize {
-        assemble_minimized
-    } else {
-        assemble_maximized
-    };
-
-    let (_, mut entry_point_code) = assemble(asm.as_slice(), config.allow_push0).unwrap();
-
+    let mut entry_point_code = generate_for_entrypoint(&mut config, entry_point_macro);
     if cli.add_default_constructor {
-        (_, entry_point_code) = assemble(
-            &generate_default_constructor(entry_point_code),
-            config.allow_push0,
-        )
-        .unwrap();
+        entry_point_code = config.assemble(&generate_default_constructor(entry_point_code));
     }
 
     println!("0x{}", hex::encode(entry_point_code));
