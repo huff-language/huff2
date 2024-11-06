@@ -1,0 +1,7 @@
+#define macro MAIN() = takes(0) returns(0) {
+    __codeoffset(NICE)
+}
+
+#define macro NICE() = {
+    stop
+}

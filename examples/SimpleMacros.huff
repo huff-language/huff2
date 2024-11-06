@@ -1,0 +1,12 @@
+#define macro MAIN() = takes(0) returns(0) {
+    0x0
+    0b111
+    wow
+    wow:
+    INNER(0b11111001, wow)
+}
+
+#define macro INNER(a, dest) = takes(0) returns(0) {
+    <dest> jump
+    <a>
+}

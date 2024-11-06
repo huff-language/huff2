@@ -1,0 +1,14 @@
+#define macro MAIN() = takes(0) returns(0) {
+    INNER()
+    target:
+}
+
+
+#define macro INNER() = {
+    target
+
+    0x1 0x1
+    add
+    0x2
+    eq
+}

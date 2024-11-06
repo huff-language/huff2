@@ -1,0 +1,6 @@
+#define function hello((uint256 hello,string)[])
+
+#define macro MAIN() = takes(0) returns(0) {
+    0x1
+    
+}

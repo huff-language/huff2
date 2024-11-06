@@ -1,0 +1,9 @@
+#define macro MAIN() = takes(0) returns(0) {
+    __codeoffset(VERY_NICE)
+    __codeoffset(MAIN)
+    skibidi
+}
+
+#define macro VERY_NICE() = {
+    skibidi
+}
