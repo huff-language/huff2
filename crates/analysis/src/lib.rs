@@ -31,7 +31,7 @@ fn get_macro_def<'src, 'ast: 'src>(
     name: &'src str,
 ) -> Option<&'ast Macro<'src>> {
     let possible_defs = global_defs.get(name)?;
-    possible_defs.into_iter().find_map(|def| match def {
+    possible_defs.iter().find_map(|def| match def {
         Definition::Macro(entry_point) => Some(entry_point),
         _ => None,
     })
