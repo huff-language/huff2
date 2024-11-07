@@ -16,7 +16,6 @@ in Rust. It comes with:
 - [ ] Code tables
     - [ ] builtins (`__tablestart`, `__tablesize`)
 - [ ] ABI builtins (`__FUNC_SIG`, `__EVEN_HASH`, `__ERROR`)
-- [ ] Macro code inclusion builtins (`__codesize`, `__codeoffset`)
 - [ ] Imports (`#include` statements)
 
 ## Why rewrite `huff-rs`?
