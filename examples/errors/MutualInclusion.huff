@@ -1,0 +1,12 @@
+#define macro MAIN() = {
+    __codeoffset(OTHER)
+}
+
+#define macro OTHER() = {
+    WOW()
+}
+
+#define macro WOW() = {
+    __codeoffset(MAIN)
+    
+}

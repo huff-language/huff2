@@ -1,7 +1,16 @@
 use ariadne::{Color, Config, Fmt, IndexType, Label, Report, ReportKind};
 use huff_ast::{Definition, IdentifiableNode, Instruction, Macro, Spanned};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+type InvokeChain<'src, 'ast> = Box<[(&'ast Macro<'src>, &'ast Spanned<&'src str>)]>;
+
+#[derive(Debug, Clone)]
+pub struct Inclusion<'src, 'ast: 'src> {
+    pub entry_point: Spanned<&'src str>,
+    pub invoke_stack: InvokeChain<'src, 'ast>,
+    pub inclusion: Spanned<&'src str>,
+}
+
+#[derive(Debug, Clone)]
 pub enum AnalysisError<'ast, 'src> {
     /// When two different definitions have the same.
     DefinitionNameCollision {
@@ -9,11 +18,14 @@ pub enum AnalysisError<'ast, 'src> {
         duplicate_name: &'src str,
     },
     RecursiveMacroInvocation {
-        invocation_chain: Box<[(&'ast Macro<'src>, &'ast Spanned<&'src str>)]>,
+        invocation_chain: InvokeChain<'src, 'ast>,
+    },
+    RecursiveCodeInclusion {
+        linking_inclusions: Box<[Inclusion<'src, 'ast>]>,
     },
     LabelNotFound {
         scope: &'ast Macro<'src>,
-        invocation_chain: Box<[(&'ast Macro<'src>, &'ast Spanned<&'src str>)]>,
+        invocation_chain: InvokeChain<'src, 'ast>,
         not_found: &'ast Spanned<&'src str>,
     },
     MacroArgNotFound {
@@ -69,7 +81,7 @@ impl AnalysisError<'_, '_> {
                         .with_config(Config::default().with_index_type(IndexType::Byte))
                         .with_message(format!(
                             "Definitions with duplicate name '{}'",
-                            duplicate_name.escape_debug().fg(Color::Red)
+                            duplicate_name.fg(Color::Red)
                         ));
 
                 base_report
@@ -100,7 +112,7 @@ impl AnalysisError<'_, '_> {
                         .with_config(Config::default().with_index_type(IndexType::Byte))
                         .with_message(format!(
                             "Cannot expand macro {} with recursive dependency on itself",
-                            first_invoke.0.ident().escape_debug().fg(Color::Red)
+                            first_invoke.0.ident().fg(Color::Red)
                         ));
 
                 invocation_chain
@@ -352,6 +364,66 @@ impl AnalysisError<'_, '_> {
                     .with_message(format!("{} is not yet supported", intent.fg(Color::Cyan),))
                     .with_label(
                         Label::new((filename.clone(), span.1.into_range())).with_color(Color::Red),
+                    )
+                    .finish()
+            }
+            Self::RecursiveCodeInclusion { linking_inclusions } => {
+                let recursing_inclusion = linking_inclusions.last().unwrap().inclusion;
+                let recursing_name = recursing_inclusion.ident();
+
+                let base_report = Report::build(
+                    ReportKind::Error,
+                    filename.clone(),
+                    recursing_inclusion.1.start,
+                )
+                .with_config(Config::default().with_index_type(IndexType::Byte))
+                .with_message(format!(
+                    "Macro {} cannot be included because it recursively includes itself",
+                    recursing_name.fg(Color::Red),
+                ));
+
+                linking_inclusions
+                    .iter()
+                    .enumerate()
+                    .skip_while(|(_i, inclusion)| inclusion.entry_point.ident() != recursing_name)
+                    .fold(base_report, |report, (i, inclusion)| {
+                        let report = report.with_label(
+                            Label::new((filename.clone(), inclusion.entry_point.1.into_range()))
+                                .with_color(Color::Blue),
+                        );
+
+                        let report = inclusion.invoke_stack.iter().fold(
+                            report,
+                            |report, (scope, invoking)| {
+                                report
+                                    .with_label(
+                                        Label::new((filename.clone(), scope.name.1.into_range()))
+                                            .with_color(Color::Red),
+                                    )
+                                    .with_label(
+                                        Label::new((filename.clone(), invoking.1.into_range()))
+                                            .with_color(Color::Yellow),
+                                    )
+                            },
+                        );
+
+                        let is_last = i == linking_inclusions.len() - 1;
+                        if !is_last {
+                            report.with_label(
+                                Label::new((filename.clone(), inclusion.inclusion.1.into_range()))
+                                    .with_color(Color::Yellow),
+                            )
+                        } else {
+                            report.with_label(
+                                Label::new((filename.clone(), inclusion.inclusion.1.into_range()))
+                                    .with_message("Recursing inclusion")
+                                    .with_color(Color::Red),
+                            )
+                        }
+                    })
+                    .with_help(
+                        "__codeoffset/__codesize attempts to include the target and all \
+                        its dependencies, which it cannot do if the dependencies are cyclic.",
                     )
                     .finish()
             }

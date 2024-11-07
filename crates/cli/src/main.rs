@@ -107,17 +107,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let unique_defs = analyze_global_for_dups(&global_defs, |err| analysis_errors.push(err));
 
     {
-        let mut to_analyze_stack = vec![cli.entry_point.as_str()];
+        let mut to_analyze_stack = vec![CodeInclusionFrame::top(cli.entry_point.as_str())];
         let mut analyzed_macros = BTreeSet::new();
-        while let Some(next_entrypoint) = to_analyze_stack.pop() {
-            if analyzed_macros.insert(next_entrypoint) {
+        while let Some(next_entrypoint) = to_analyze_stack.last() {
+            let idx_to_remove = to_analyze_stack.len() - 1;
+            if analyzed_macros.insert(next_entrypoint.name) {
                 analyze_entry_point(
                     &global_defs,
-                    next_entrypoint,
+                    next_entrypoint.name,
                     |err| analysis_errors.push(err),
                     &mut to_analyze_stack,
                 );
             }
+            to_analyze_stack.remove(idx_to_remove);
         }
     }
 

@@ -60,7 +60,6 @@ pub fn generate_for_entrypoint<'src>(
         &mut included_macros,
         &mut asm,
     );
-    asm.push(Asm::Mark(end_id));
 
     included_macros.into_iter().skip(1).for_each(|included| {
         let section_macro =
@@ -73,6 +72,8 @@ pub fn generate_for_entrypoint<'src>(
         asm.push(Asm::Data(generate_for_entrypoint(globals, section_macro)));
         asm.push(Asm::Mark(included.end_id));
     });
+
+    asm.push(Asm::Mark(end_id));
 
     globals.assemble(asm.as_slice())
 }
