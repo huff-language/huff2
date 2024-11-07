@@ -3,14 +3,14 @@ use huff_ast::{Definition, IdentifiableNode, Instruction, Macro, Spanned};
 
 type InvokeChain<'src, 'ast> = Box<[(&'ast Macro<'src>, &'ast Spanned<&'src str>)]>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Inclusion<'src, 'ast: 'src> {
     pub entry_point: Spanned<&'src str>,
     pub invoke_stack: InvokeChain<'src, 'ast>,
     pub inclusion: Spanned<&'src str>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AnalysisError<'ast, 'src> {
     /// When two different definitions have the same.
     DefinitionNameCollision {
