@@ -1,7 +1,7 @@
 pub mod errors;
 pub mod label_stack;
 
-use crate::errors::AnalysisError;
+use crate::errors::{AnalysisError, Inclusion};
 use crate::label_stack::LabelStack;
 use huff_ast::{Definition, IdentifiableNode, Instruction, Invoke, Macro, MacroStatement, Spanned};
 use std::collections::BTreeMap;
@@ -26,19 +26,27 @@ pub fn analyze_global_for_dups<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 's
         .collect()
 }
 
+fn get_macro_def<'src, 'ast: 'src>(
+    global_defs: &BTreeMap<&'src str, Vec<&'ast Definition<'src>>>,
+    name: &'src str,
+) -> Option<&'ast Macro<'src>> {
+    let possible_defs = global_defs.get(name)?;
+    possible_defs.into_iter().find_map(|def| match def {
+        Definition::Macro(entry_point) => Some(entry_point),
+        _ => None,
+    })
+}
+
 pub fn analyze_entry_point<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
     global_defs: &BTreeMap<&'src str, Vec<&'ast Definition<'src>>>,
     entry_point_name: &'src str,
     mut emit_error: E,
-    macros_to_analyze: &mut Vec<&'src str>,
+    macros_to_include: &mut Vec<CodeInclusionFrame<'src, 'ast>>,
 ) {
     let mut invoke_stack = Vec::with_capacity(32);
     let mut label_stack = LabelStack::default();
 
-    let entry_point = if let Some(Definition::Macro(entry_point)) = global_defs
-        .get(entry_point_name)
-        .and_then(|defs| defs.first())
-    {
+    let entry_point = if let Some(entry_point) = get_macro_def(global_defs, entry_point_name) {
         entry_point
     } else {
         emit_error(AnalysisError::EntryPointNotFound {
@@ -59,31 +67,50 @@ pub fn analyze_entry_point<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)
         &mut label_stack,
         &mut invoke_stack,
         &mut emit_error,
-        macros_to_analyze,
+        macros_to_include,
     );
 }
 
 macro_rules! global_exists {
     ($global_defs:expr, $ident:expr, $pattern:pat) => {
-        $global_defs
-            .get($ident)
-            .map(|defs| {
-                defs.iter().any(|def| match def {
-                    $pattern => true,
-                    _ => false,
-                })
+        $global_defs.get($ident).map_or(false, |defs| {
+            defs.iter().any(|def| match def {
+                $pattern => true,
+                _ => false,
             })
-            .unwrap_or(false)
+        })
     };
 }
 
+#[derive(Debug, Clone)]
+pub struct CodeInclusionFrame<'src, 'ast: 'src> {
+    pub name: &'src str,
+    linking_inclusions: Vec<Inclusion<'src, 'ast>>,
+}
+
+impl<'src> CodeInclusionFrame<'src, '_> {
+    pub fn top(name: &'src str) -> Self {
+        Self {
+            name,
+            linking_inclusions: vec![],
+        }
+    }
+
+    fn already_included(&self, name: &'src str) -> bool {
+        self.linking_inclusions
+            .iter()
+            .any(|inclusion| inclusion.entry_point.ident() == name)
+    }
+}
+
+#[derive(Debug)]
 struct MacroAnalysis<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> {
     global_defs: &'a BTreeMap<&'src str, Vec<&'ast Definition<'src>>>,
     m: &'ast Macro<'src>,
     label_stack: &'a mut LabelStack<'src, ()>,
     invoke_stack: &'a mut Vec<(&'ast Macro<'src>, &'ast Spanned<&'src str>)>,
     emit_error: &'a mut E,
-    macros_to_analyze: &'a mut Vec<&'src str>,
+    macros_to_include: &'a mut Vec<CodeInclusionFrame<'src, 'ast>>,
 }
 
 impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a, 'src, 'ast, E> {
@@ -97,7 +124,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
         label_stack: &'a mut LabelStack<'src, ()>,
         invoke_stack: &'a mut Vec<(&'ast Macro<'src>, &'ast Spanned<&'src str>)>,
         emit_error: &'a mut E,
-        macros_to_analyze: &mut Vec<&'src str>,
+        macros_to_include: &mut Vec<CodeInclusionFrame<'src, 'ast>>,
     ) {
         MacroAnalysis {
             global_defs,
@@ -105,9 +132,17 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
             label_stack,
             invoke_stack,
             emit_error,
-            macros_to_analyze,
+            macros_to_include,
         }
         .analyze();
+    }
+
+    fn entry_point(&self) -> &Macro<'src> {
+        get_macro_def(self.global_defs, self.current_frame().name).unwrap()
+    }
+
+    fn current_frame(&self) -> &CodeInclusionFrame<'src, 'ast> {
+        self.macros_to_include.last().unwrap()
     }
 
     fn analyze(&mut self) {
@@ -205,7 +240,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                                 self.label_stack,
                                 self.invoke_stack,
                                 self.emit_error,
-                                self.macros_to_analyze,
+                                self.macros_to_include,
                             );
                         });
                     self.invoke_stack.pop().unwrap();
@@ -235,23 +270,44 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                             def_type: "macro",
                             not_found: code_ref,
                         });
+                        return;
                     }
                     if self
                         .global_defs
                         .get(code_ref.ident())
-                        .map(|defs| {
+                        .map_or(false, |defs| {
                             defs.iter().any(
                                 |def| matches!(def, Definition::Macro(m) if m.args.0.len() > 0),
                             )
                         })
-                        .unwrap_or(false)
                     {
                         self.emit(AnalysisError::NotYetSupported {
                             intent: "code introspection for macros with arguments".to_owned(),
                             span: ((), code_ref.1),
                         });
+                        return;
                     }
-                    self.macros_to_analyze.push(code_ref.ident());
+                    let mut linking_inclusions = self.current_frame().linking_inclusions.clone();
+
+                    let entry_point_name = self.entry_point().name;
+                    let inclusion = Inclusion {
+                        invoke_stack: self.invoke_stack.clone().into_boxed_slice(),
+                        entry_point: entry_point_name,
+                        inclusion: *code_ref,
+                    };
+                    linking_inclusions.push(inclusion);
+                    if self.current_frame().already_included(code_ref.ident())
+                        && code_ref.ident() != entry_point_name.ident()
+                    {
+                        self.emit(AnalysisError::RecursiveCodeInclusion {
+                            linking_inclusions: linking_inclusions.into_boxed_slice(),
+                        })
+                    } else {
+                        self.macros_to_include.push(CodeInclusionFrame {
+                            name: code_ref.ident(),
+                            linking_inclusions,
+                        });
+                    }
                 }
                 Invoke::BuiltinFuncSig(func_or_error_ref)
                 | Invoke::BuiltinError(func_or_error_ref) => {
