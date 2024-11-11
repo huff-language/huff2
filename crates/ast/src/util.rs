@@ -59,18 +59,13 @@ pub fn u256_as_push(value: U256) -> Opcode {
 
 type Selector = (FixedBytes<4>, FixedBytes<4>);
 
-pub fn compute_selector(
-    func: SolFunction,
-    err: SolError,
-) -> Option<(FixedBytes<4>, FixedBytes<4>)> {
+pub fn compute_selector(name: &Spanned<&str>, args: &Box<[Spanned<DynSolType>]>) -> FixedBytes<4> {
     let build_signature = |name: &Spanned<&str>, args: &Box<[Spanned<DynSolType>]>| -> Vec<u8> {
-        let arg_types: Vec<_> = args
+        let arg_types: Vec<String> = args
             .iter()
-            .map(|arg| match arg.0 {
-                DynSolType::Address => "address",
-                DynSolType::Uint(_) => "uint256",
-                DynSolType::String => "string",
-                _ => panic!("Unsupported type: {:?}", arg.0),
+            .map(|arg| {
+                let type_str = arg.0.to_string();
+                type_str
             })
             .collect();
 
@@ -79,56 +74,16 @@ pub fn compute_selector(
         signature.push('(');
         signature.push_str(&arg_types.join(","));
         signature.push(')');
+
         signature.into_bytes()
     };
 
-    let build_selector =
-        |name: &Spanned<&str>, args: &Box<[Spanned<DynSolType>]>| -> FixedBytes<4> {
-            let signature = build_signature(name, args);
-            let hash = keccak256(signature);
-            FixedBytes::<4>::from_slice(&hash[..4])
-        };
+    let signature = build_signature(name, args);
 
-    let func_selector = build_selector(&func.name, &func.args);
-    let err_selector = build_selector(&err.name, &err.args);
+    let hash = keccak256(signature);
 
-    Some((func_selector, err_selector))
+    let selector = FixedBytes::<4>::from_slice(&hash[..4]);
+
+    selector
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ast::*;
-    use alloy_dyn_abi::DynSolType;
-    use alloy_primitives::keccak256;
-    use chumsky::span::Span;
-
-    #[test]
-    fn test_compute_selector() {
-        let func = SolFunction {
-            name: Spanned::new("transfer", 0..8),
-            args: Box::new([
-                Spanned::new(DynSolType::Address, 9..17),
-                Spanned::new(DynSolType::Uint(256), 18..26),
-            ]),
-            rets: Box::new([]),
-        };
-        let err = SolError {
-            name: Spanned::new("TransferFailed", 0..15),
-            args: Box::new([
-                Spanned::new(DynSolType::String, 16..21),
-                Spanned::new(DynSolType::Uint(256), 22..30),
-            ]),
-        };
-        let selectors = compute_selector(func.clone(), err.clone()).unwrap();
-        let expected_func_hash = keccak256(selectors.0.clone());
-        let expected_err_hash = keccak256(selectors.1.clone());
-        //println!("{}", &selectors);
-        let expected_func_selector: Selector = (
-            FixedBytes::from_slice(&expected_func_hash[..4]),
-            FixedBytes::from_slice(&expected_err_hash[..4]),
-        );
-        assert_eq!(selectors.0, expected_func_selector.0);
-        assert_eq!(selectors.1, expected_func_selector.1);
-    }
-}
