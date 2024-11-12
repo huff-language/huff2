@@ -57,7 +57,7 @@ pub fn u256_as_push(value: U256) -> Opcode {
     }
 }
 
-type Selector = (FixedBytes<4>, FixedBytes<4>);
+
 
 pub fn compute_selector(name: &Spanned<&str>, args: &Box<[Spanned<DynSolType>]>) -> FixedBytes<4> {
     let build_signature = |name: &Spanned<&str>, args: &Box<[Spanned<DynSolType>]>| -> Vec<u8> {
