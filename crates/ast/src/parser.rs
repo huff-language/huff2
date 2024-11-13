@@ -280,7 +280,7 @@ fn table<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition
                 .collect::<Vec<_>>()
                 .delimited_by(punct('{'), punct('}')),
         )
-        .map(|(name, code)| ast::Definition::Table {
+        .map(|(name, code)| ast::Definition::CodeTable {
             name,
             data: code
                 .into_iter()
@@ -668,7 +668,7 @@ mod tests {
         assert_ok!(
             table(),
             vec![Ident("table"), Ident("TEST"), Punct('{'), Hex("0xc0de"), Punct('}')],
-            ast::Definition::Table {
+            ast::Definition::CodeTable {
                 name: ("TEST", span),
                 data: Box::new([0xc0, 0xde])
             }
@@ -683,7 +683,7 @@ mod tests {
                 Hex("0xcc00ddee"),
                 Punct('}')
             ],
-            ast::Definition::Table {
+            ast::Definition::CodeTable {
                 name: ("TEST", span),
                 data: Box::new([0xc0, 0xde, 0xcc, 0x00, 0xdd, 0xee])
             }

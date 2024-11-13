@@ -249,7 +249,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                     if !global_exists!(
                         self.global_defs,
                         table_ref.ident(),
-                        Definition::Table { .. } | Definition::Jumptable(_)
+                        Definition::CodeTable { .. } | Definition::Jumptable(_)
                     ) {
                         self.emit(AnalysisError::DefinitionNotFound {
                             scope: self.m,
@@ -478,7 +478,7 @@ mod test {
             expr: (ConstExpr::FreeStoragePointer, span),
         };
 
-        let unrelated_table = Definition::Table {
+        let unrelated_table = Definition::CodeTable {
             name: ("awesome_stuff", span),
             data: Box::new([0x00, 0x01]),
         };
