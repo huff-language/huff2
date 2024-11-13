@@ -3,8 +3,7 @@ use chumsky::{
     error::Rich,
     extra,
     primitive::{any, choice, just, none_of, one_of},
-    text::{self, ascii::keyword},
-    IterParser, Parser,
+    text, IterParser, Parser,
 };
 use std::fmt;
 
@@ -13,15 +12,17 @@ pub(crate) fn lex(src: &str) -> Result<Vec<Spanned<Token>>, Vec<Rich<'_, Token<'
     lexer().parse(src).into_result().map_err(|e| {
         e.into_iter()
             .map(|errs| errs.map_token(Token::Error))
-            .collect::<Vec<_>>()
+            .collect()
     })
 }
 
 /// Lexer token
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token<'src> {
+    Define,
+    Include,
+
     Comment(&'src str),
-    Keyword(&'src str),
     Ident(&'src str),
     Punct(char),
     Dec(&'src str),
@@ -35,12 +36,11 @@ pub enum Token<'src> {
 impl fmt::Display for Token<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Token::Comment(s)
-            | Token::Keyword(s)
-            | Token::Ident(s)
-            | Token::Dec(s)
-            | Token::Hex(s)
-            | Token::Bin(s) => write!(f, "{}", s),
+            Token::Define => write!(f, "#define"),
+            Token::Include => write!(f, "#include"),
+            Token::Comment(s) | Token::Ident(s) | Token::Dec(s) | Token::Hex(s) | Token::Bin(s) => {
+                write!(f, "{}", s)
+            }
             Token::String(s) => write!(f, "{}", s),
             Token::Punct(c) | Token::Error(c) => write!(f, "{}", c),
         }
@@ -59,10 +59,11 @@ fn lexer<'src>(
                 }
             }
         });
-    let keyword = just("#")
-        .ignore_then(choice((keyword("define"), keyword("include"))))
-        .then_ignore(validate_end)
-        .map(Token::Keyword);
+    let keyword = choice((
+        just("#define").to(Token::Define),
+        just("#include").to(Token::Include),
+    ))
+    .then_ignore(validate_end);
 
     let ident = text::ident().then_ignore(validate_end).map(Token::Ident);
 
@@ -96,7 +97,7 @@ fn lexer<'src>(
 
     // comments
     let single_line_comment = just("//")
-        .then(any().and_is(just('\n').not()).repeated())
+        .then(any().and_is(text::newline().not()).repeated())
         .padded();
     let multi_line_comment = just("/*")
         .then(any().and_is(just("*/").not()).repeated())
@@ -135,11 +136,8 @@ mod tests {
 
     #[test]
     fn lex_keyword() {
-        assert_ok!("#define", (Token::Keyword("define"), SimpleSpan::new(0, 7)));
-        assert_ok!(
-            "#include",
-            (Token::Keyword("include"), SimpleSpan::new(0, 8))
-        );
+        assert_ok!("#define", (Token::Define, SimpleSpan::new(0, 7)));
+        assert_ok!("#include", (Token::Include, SimpleSpan::new(0, 8)));
     }
 
     #[test]

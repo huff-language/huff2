@@ -65,7 +65,7 @@ fn root<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Root<'src>>
 
 fn root_section<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::RootSection<'src>> {
     let definition = definition().map(ast::RootSection::Definition);
-    let include = just(Keyword("include"))
+    let include = just(Include)
         .ignore_then(select! {String(s) => s}.map_with(|s, ex| (s, ex.span())))
         .map(ast::RootSection::Include);
 
@@ -73,7 +73,7 @@ fn root_section<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Roo
 }
 
 fn definition<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
-    just(Keyword("define")).ignore_then(choice((
+    just(Define).ignore_then(choice((
         r#macro(),
         constant(),
         table(),
@@ -496,12 +496,12 @@ mod tests {
 
         assert_ok!(
             root_section(),
-            vec![Keyword("include"), String("test".to_string())],
+            vec![Include, String("test".to_string())],
             ast::RootSection::Include(("test".to_string(), span))
         );
         assert_ok!(
             root_section(),
-            vec![Keyword("define"), Ident("constant"), Ident("TEST"), Punct('='), Hex("0x1")],
+            vec![Define, Ident("constant"), Ident("TEST"), Punct('='), Hex("0x1")],
             ast::RootSection::Definition(ast::Definition::Constant {
                 name: ("TEST", span),
                 expr: (ast::ConstExpr::Value(uint!(1_U256)), span)
