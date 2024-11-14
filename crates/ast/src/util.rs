@@ -1,4 +1,4 @@
-use crate::ast::{SolError, SolFunction};
+
 use crate::Spanned;
 use alloy_dyn_abi::DynSolType;
 use alloy_primitives::{keccak256, FixedBytes, U256};
@@ -57,8 +57,6 @@ pub fn u256_as_push(value: U256) -> Opcode {
     }
 }
 
-
-
 pub fn compute_selector(name: &Spanned<&str>, args: &Box<[Spanned<DynSolType>]>) -> FixedBytes<4> {
     let build_signature = |name: &Spanned<&str>, args: &Box<[Spanned<DynSolType>]>| -> Vec<u8> {
         let arg_types: Vec<String> = args
@@ -86,4 +84,3 @@ pub fn compute_selector(name: &Spanned<&str>, args: &Box<[Spanned<DynSolType>]>)
 
     selector
 }
-
