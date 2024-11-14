@@ -21,6 +21,9 @@ pub(crate) fn lex(src: &str) -> Result<Vec<Spanned<Token>>, Vec<Rich<'_, Token<'
 pub enum Token<'src> {
     Define,
     Include,
+    Table,
+    JumpTable,
+    JumpTablePacked,
 
     Comment(&'src str),
     Ident(&'src str),
@@ -38,6 +41,9 @@ impl fmt::Display for Token<'_> {
         match self {
             Token::Define => write!(f, "#define"),
             Token::Include => write!(f, "#include"),
+            Token::Table => write!(f, "table"),
+            Token::JumpTable => write!(f, "jumptable"),
+            Token::JumpTablePacked => write!(f, "jumptable__packed"),
             Token::Comment(s) | Token::Ident(s) | Token::Dec(s) | Token::Hex(s) | Token::Bin(s) => {
                 write!(f, "{}", s)
             }
@@ -62,6 +68,9 @@ fn lexer<'src>(
     let keyword = choice((
         just("#define").to(Token::Define),
         just("#include").to(Token::Include),
+        just("table").to(Token::Table),
+        just("jumptable__packed").to(Token::JumpTablePacked),
+        just("jumptable").to(Token::JumpTable),
     ))
     .then_ignore(validate_end);
 
@@ -138,6 +147,12 @@ mod tests {
     fn lex_keyword() {
         assert_ok!("#define", (Token::Define, SimpleSpan::new(0, 7)));
         assert_ok!("#include", (Token::Include, SimpleSpan::new(0, 8)));
+        assert_ok!("table", (Token::Table, SimpleSpan::new(0, 5)));
+        assert_ok!("jumptable", (Token::JumpTable, SimpleSpan::new(0, 9)));
+        assert_ok!(
+            "jumptable__packed",
+            (Token::JumpTablePacked, SimpleSpan::new(0, 17))
+        );
     }
 
     #[test]

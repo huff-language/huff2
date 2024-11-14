@@ -478,10 +478,10 @@ mod test {
             expr: (ConstExpr::FreeStoragePointer, span),
         };
 
-        let unrelated_table = Definition::CodeTable {
+        let unrelated_table = Definition::CodeTable(CodeTable {
             name: ("awesome_stuff", span),
             data: Box::new([0x00, 0x01]),
-        };
+        });
         let d3 = Definition::Macro(Macro {
             name: ("TheWhat", span),
             args: (Box::new([("nice", span)]), span),

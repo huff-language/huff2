@@ -76,7 +76,8 @@ fn definition<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Defin
     just(Define).ignore_then(choice((
         r#macro(),
         constant(),
-        table(),
+        code_table(),
+        jump_table(),
         sol_function(),
         sol_event(),
         sol_error(),
@@ -271,8 +272,8 @@ fn constant<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definit
         .map(|(name, expr)| ast::Definition::Constant { name, expr })
 }
 
-fn table<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
-    just(Ident("table"))
+fn code_table<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
+    just(Table)
         .ignore_then(ident())
         .then(
             code()
@@ -280,7 +281,7 @@ fn table<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition
                 .collect::<Vec<_>>()
                 .delimited_by(punct('{'), punct('}')),
         )
-        .map(|(name, code)| ast::Definition::CodeTable {
+        .map(|(name, code)| ast::CodeTable {
             name,
             data: code
                 .into_iter()
@@ -288,6 +289,25 @@ fn table<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
         })
+        .map(ast::Definition::CodeTable)
+}
+
+fn jump_table<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
+    choice((just(JumpTable).to(32), just(JumpTablePacked).to(2)))
+        .then(ident())
+        .then(
+            ident()
+                .repeated()
+                .collect()
+                .map(|x: Vec<_>| x.into_boxed_slice())
+                .delimited_by(punct('{'), punct('}')),
+        )
+        .map(|((label_size, name), labels)| ast::Jumptable {
+            name,
+            label_size,
+            labels,
+        })
+        .map(ast::Definition::Jumptable)
 }
 
 fn sol_function<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
@@ -666,27 +686,20 @@ mod tests {
         let span: Span = SimpleSpan::new(0, 0);
 
         assert_ok!(
-            table(),
-            vec![Ident("table"), Ident("TEST"), Punct('{'), Hex("0xc0de"), Punct('}')],
-            ast::Definition::CodeTable {
+            code_table(),
+            vec![Table, Ident("TEST"), Punct('{'), Hex("0xc0de"), Punct('}')],
+            ast::Definition::CodeTable(ast::CodeTable {
                 name: ("TEST", span),
                 data: Box::new([0xc0, 0xde])
-            }
+            })
         );
         assert_ok!(
-            table(),
-            vec![
-                Ident("table"),
-                Ident("TEST"),
-                Punct('{'),
-                Hex("0xc0de"),
-                Hex("0xcc00ddee"),
-                Punct('}')
-            ],
-            ast::Definition::CodeTable {
+            code_table(),
+            vec![Table, Ident("TEST"), Punct('{'), Hex("0xc0de"), Hex("0xcc00ddee"), Punct('}')],
+            ast::Definition::CodeTable(ast::CodeTable {
                 name: ("TEST", span),
                 data: Box::new([0xc0, 0xde, 0xcc, 0x00, 0xdd, 0xee])
-            }
+            })
         );
     }
 

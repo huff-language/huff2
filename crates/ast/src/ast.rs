@@ -20,10 +20,7 @@ pub enum Definition<'src> {
         expr: Spanned<ConstExpr>,
     },
     Jumptable(Jumptable<'src>),
-    CodeTable {
-        name: Spanned<&'src str>,
-        data: Box<[u8]>,
-    },
+    CodeTable(CodeTable<'src>),
     SolFunction(SolFunction<'src>),
     SolEvent(SolEvent<'src>),
     SolError(SolError<'src>),
@@ -47,7 +44,7 @@ impl<'src> IdentifiableNode<'src> for Definition<'src> {
             Self::Macro(m) => &m.name,
             Self::Constant { name, .. } => name,
             Self::Jumptable(jt) => &jt.name,
-            Self::CodeTable { name, .. } => name,
+            Self::CodeTable(ct) => &ct.name,
             Self::SolEvent(e) => &e.name,
             Self::SolError(e) => &e.name,
             Self::SolFunction(f) => &f.name,
@@ -119,10 +116,16 @@ pub enum Invoke<'src> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodeTable<'src> {
+    pub name: Spanned<&'src str>,
+    pub data: Box<[u8]>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Jumptable<'src> {
     pub name: Spanned<&'src str>,
-    pub size: u8,
-    pub labels: Box<[&'src str]>,
+    pub label_size: u8,
+    pub labels: Box<[Spanned<&'src str>]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
