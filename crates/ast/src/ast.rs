@@ -19,7 +19,7 @@ pub enum Definition<'src> {
         name: Spanned<&'src str>,
         expr: Spanned<ConstExpr>,
     },
-    Jumptable(Jumptable<'src>),
+    Jumptable(Spanned<Jumptable<'src>>),
     CodeTable(CodeTable<'src>),
     SolFunction(SolFunction<'src>),
     SolEvent(SolEvent<'src>),
@@ -43,7 +43,7 @@ impl<'src> IdentifiableNode<'src> for Definition<'src> {
         match self {
             Self::Macro(m) => &m.name,
             Self::Constant { name, .. } => name,
-            Self::Jumptable(jt) => &jt.name,
+            Self::Jumptable(jt) => &jt.0.name,
             Self::CodeTable(ct) => &ct.name,
             Self::SolEvent(e) => &e.name,
             Self::SolError(e) => &e.name,
