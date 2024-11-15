@@ -56,7 +56,7 @@ pub fn u256_as_push(value: U256) -> Opcode {
     }
 }
 
-pub fn compute_selector(name: &Spanned<&str>, args: &Box<[Spanned<DynSolType>]>) -> FixedBytes<4> {
+pub fn compute_selector(name: &Spanned<&str>, args: Box<[&Spanned<DynSolType>]>) -> FixedBytes<4> {
     let arg_types: Vec<String> = args.iter().map(|arg| arg.0.to_string()).collect();
 
     let signature = format!("{}({})", name.0, arg_types.join(","));
@@ -67,8 +67,8 @@ pub fn compute_selector(name: &Spanned<&str>, args: &Box<[Spanned<DynSolType>]>)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ast::{SolError, SolFunction};
     use chumsky::span::Span;
-    use crate::ast::{SolFunction, SolError};
 
     #[test]
 
