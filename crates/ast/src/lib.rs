@@ -5,4 +5,4 @@ mod util;
 
 pub use ast::*;
 pub use parser::parse;
-pub use util::u256_as_push;
+pub use util::*;
