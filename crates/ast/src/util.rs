@@ -90,8 +90,8 @@ mod tests {
             ]),
         };
 
-        let func_selector = compute_selector(&func.name, &func.args);
-        let err_selector = compute_selector(&err.name, &err.args);
+        let func_selector = compute_selector(&func.name, func.args.iter().collect::<Box<[_]>>());
+        let err_selector = compute_selector(&err.name, err.args.iter().collect::<Box<[_]>>());
 
         let expected_func_signature = "transfer(address,uint256)";
         let expected_err_signature = "TransferFailed(string,uint256)";
