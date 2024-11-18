@@ -56,7 +56,7 @@ pub fn u256_as_push(value: U256) -> Opcode {
     }
 }
 
-pub fn compute_selector(name: &Spanned<&str>, args: Box<[&Spanned<DynSolType>]>) -> FixedBytes<4> {
+pub fn compute_selector(name: &Spanned<&str>, args: &[&Spanned<DynSolType>]) -> FixedBytes<4> {
     let arg_types: Vec<String> = args.iter().map(|arg| arg.0.to_string()).collect();
 
     let signature = format!("{}({})", name.0, arg_types.join(","));
@@ -90,8 +90,10 @@ mod tests {
             ]),
         };
 
-        let func_selector = compute_selector(&func.name, func.args.iter().collect::<Box<[_]>>());
-        let err_selector = compute_selector(&err.name, err.args.iter().collect::<Box<[_]>>());
+        let func_selector =
+            compute_selector(&func.name, func.args.iter().collect::<Vec<_>>().as_slice());
+        let err_selector =
+            compute_selector(&err.name, err.args.iter().collect::<Vec<_>>().as_slice());
 
         let expected_func_signature = "transfer(address,uint256)";
         let expected_err_signature = "TransferFailed(string,uint256)";
