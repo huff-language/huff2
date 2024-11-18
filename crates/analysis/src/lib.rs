@@ -308,15 +308,10 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                         });
                         return;
                     }
-                    if self
-                        .global_defs
-                        .get(code_ref.ident())
-                        .map_or(false, |defs| {
-                            defs.iter().any(
-                                |def| matches!(def, Definition::Macro(m) if m.args.0.len() > 0),
-                            )
-                        })
-                    {
+                    if self.global_defs.get(code_ref.ident()).is_some_and(|defs| {
+                        defs.iter()
+                            .any(|def| matches!(def, Definition::Macro(m) if m.args.0.len() > 0))
+                    }) {
                         self.emit(AnalysisError::NotYetSupported {
                             intent: "code introspection for macros with arguments".to_owned(),
                             span: code_ref.1,
