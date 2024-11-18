@@ -3,6 +3,8 @@ use alloy_primitives::U256;
 use chumsky::span::SimpleSpan;
 use evm_glue::opcodes::Opcode;
 
+pub type Text<'src> = Spanned<&'src str>;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Root<'src>(pub Box<[RootSection<'src>]>);
 
@@ -16,7 +18,7 @@ pub enum RootSection<'src> {
 pub enum Definition<'src> {
     Macro(Macro<'src>),
     Constant {
-        name: Spanned<&'src str>,
+        name: Text<'src>,
         expr: Spanned<ConstExpr>,
     },
     Jumptable(Spanned<Jumptable<'src>>),
@@ -27,7 +29,7 @@ pub enum Definition<'src> {
 }
 
 pub trait IdentifiableNode<'a> {
-    fn spanned(&self) -> &Spanned<&'a str>;
+    fn spanned(&self) -> &Text<'a>;
 
     fn ident(&self) -> &'a str {
         self.spanned().0
@@ -39,7 +41,7 @@ pub trait IdentifiableNode<'a> {
 }
 
 impl<'src> IdentifiableNode<'src> for Definition<'src> {
-    fn spanned(&self) -> &Spanned<&'src str> {
+    fn spanned(&self) -> &Text<'src> {
         match self {
             Self::Macro(m) => &m.name,
             Self::Constant { name, .. } => name,
@@ -54,14 +56,14 @@ impl<'src> IdentifiableNode<'src> for Definition<'src> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Macro<'src> {
-    pub name: Spanned<&'src str>,
-    pub args: Spanned<Box<[Spanned<&'src str>]>>,
+    pub name: Text<'src>,
+    pub args: Spanned<Box<[Text<'src>]>>,
     pub takes_returns: Option<(Spanned<usize>, Spanned<usize>)>,
     pub body: Box<[MacroStatement<'src>]>,
 }
 
 impl<'src> IdentifiableNode<'src> for Macro<'src> {
-    fn spanned(&self) -> &Spanned<&'src str> {
+    fn spanned(&self) -> &Text<'src> {
         &self.name
     }
 }
@@ -83,9 +85,9 @@ pub enum MacroStatement<'src> {
 pub enum Instruction<'src> {
     Op(Spanned<Opcode>),
     VariablePush(Spanned<U256>),
-    LabelReference(Spanned<&'src str>),
-    MacroArgReference(Spanned<&'src str>),
-    ConstantReference(Spanned<&'src str>),
+    LabelReference(Text<'src>),
+    MacroArgReference(Text<'src>),
+    ConstantReference(Text<'src>),
 }
 
 impl Instruction<'_> {
@@ -103,47 +105,47 @@ impl Instruction<'_> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Invoke<'src> {
     Macro {
-        name: Spanned<&'src str>,
+        name: Text<'src>,
         args: Spanned<Box<[Instruction<'src>]>>,
     },
-    BuiltinTableStart(Spanned<&'src str>),
-    BuiltinTableSize(Spanned<&'src str>),
-    BuiltinCodeSize(Spanned<&'src str>),
-    BuiltinCodeOffset(Spanned<&'src str>),
-    BuiltinFuncSig(Spanned<&'src str>),
-    BuiltinEventHash(Spanned<&'src str>),
-    BuiltinError(Spanned<&'src str>),
+    BuiltinTableStart(Text<'src>),
+    BuiltinTableSize(Text<'src>),
+    BuiltinCodeSize(Text<'src>),
+    BuiltinCodeOffset(Text<'src>),
+    BuiltinFuncSig(Text<'src>),
+    BuiltinEventHash(Text<'src>),
+    BuiltinError(Text<'src>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CodeTable<'src> {
-    pub name: Spanned<&'src str>,
+    pub name: Text<'src>,
     pub data: Box<[u8]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Jumptable<'src> {
-    pub name: Spanned<&'src str>,
+    pub name: Text<'src>,
     pub label_size: u8,
-    pub labels: Box<[Spanned<&'src str>]>,
+    pub labels: Box<[Text<'src>]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SolFunction<'src> {
-    pub name: Spanned<&'src str>,
+    pub name: Text<'src>,
     pub args: Box<[Spanned<DynSolType>]>,
     pub rets: Box<[Spanned<DynSolType>]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SolEvent<'src> {
-    pub name: Spanned<&'src str>,
+    pub name: Text<'src>,
     pub args: Box<[Spanned<DynSolType>]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SolError<'src> {
-    pub name: Spanned<&'src str>,
+    pub name: Text<'src>,
     pub args: Box<[Spanned<DynSolType>]>,
 }
 
@@ -154,7 +156,7 @@ pub type Span = SimpleSpan<usize>;
 pub type Spanned<T> = (T, Span);
 
 impl<'src> IdentifiableNode<'src> for Spanned<&'src str> {
-    fn spanned(&self) -> &Spanned<&'src str> {
+    fn spanned(&self) -> &Text<'src> {
         self
     }
 }

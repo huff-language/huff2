@@ -3,8 +3,8 @@ pub mod label_stack;
 
 use crate::errors::{AnalysisError, Inclusion};
 use crate::label_stack::LabelStack;
-use huff_ast::{Definition, IdentifiableNode, Instruction, Invoke, Macro, MacroStatement, Spanned};
-use std::collections::BTreeMap;
+use huff_ast::{Definition, IdentifiableNode, Instruction, Invoke, Macro, MacroStatement, Text};
+use std::collections::{BTreeMap, HashSet};
 
 pub fn analyze_global_for_dups<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)>(
     global_defs: &BTreeMap<&'src str, Vec<&'ast Definition<'src>>>,
@@ -108,9 +108,10 @@ struct MacroAnalysis<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> 
     global_defs: &'a BTreeMap<&'src str, Vec<&'ast Definition<'src>>>,
     m: &'ast Macro<'src>,
     label_stack: &'a mut LabelStack<'src, ()>,
-    invoke_stack: &'a mut Vec<(&'ast Macro<'src>, &'ast Spanned<&'src str>)>,
+    invoke_stack: &'a mut Vec<(&'ast Text<'src>, &'ast Text<'src>)>,
     emit_error: &'a mut E,
     macros_to_include: &'a mut Vec<CodeInclusionFrame<'src, 'ast>>,
+    validated_tables: HashSet<&'src str>,
 }
 
 impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a, 'src, 'ast, E> {
@@ -122,7 +123,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
         global_defs: &'a BTreeMap<&'src str, Vec<&'ast Definition<'src>>>,
         m: &'ast Macro<'src>,
         label_stack: &'a mut LabelStack<'src, ()>,
-        invoke_stack: &'a mut Vec<(&'ast Macro<'src>, &'ast Spanned<&'src str>)>,
+        invoke_stack: &'a mut Vec<(&'ast Text<'src>, &'ast Text<'src>)>,
         emit_error: &'a mut E,
         macros_to_include: &mut Vec<CodeInclusionFrame<'src, 'ast>>,
     ) {
@@ -133,6 +134,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
             invoke_stack,
             emit_error,
             macros_to_include,
+            validated_tables: HashSet::with_capacity(16),
         }
         .analyze();
     }
@@ -151,7 +153,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
         if self
             .invoke_stack
             .iter()
-            .any(|(invoked, _)| invoked.name.0 == name)
+            .any(|(invoked, _)| invoked.ident() == name)
         {
             self.emit(AnalysisError::RecursiveMacroInvocation {
                 invocation_chain: self.invoke_stack.clone().into_boxed_slice(),
@@ -205,12 +207,11 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                     // Emit error if we don't find at least 1 macro by the given name.
                     if !global_exists!(self.global_defs, name.ident(), Definition::Macro(_)) {
                         self.emit(AnalysisError::DefinitionNotFound {
-                            scope: self.m,
                             def_type: "macro",
                             not_found: name,
                         });
                     }
-                    self.invoke_stack.push((self.m, name));
+                    self.invoke_stack.push((&self.m.name, name));
 
                     // Filter and process all macros with given name to make sure errors are complete.
                     self.global_defs
@@ -249,24 +250,59 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                     if !global_exists!(
                         self.global_defs,
                         table_ref.ident(),
-                        Definition::CodeTable { .. } | Definition::Jumptable(_)
+                        Definition::CodeTable(_) | Definition::Jumptable(_)
                     ) {
                         self.emit(AnalysisError::DefinitionNotFound {
-                            scope: self.m,
                             def_type: "table",
                             not_found: table_ref,
-                        })
+                        });
+                        return;
                     }
 
-                    self.emit(AnalysisError::NotYetSupported {
-                        intent: "__tablesize and __tableoffset".to_string(),
-                        span: ((), table_ref.1),
-                    });
+                    let newly_inserted = self.validated_tables.insert(table_ref.ident());
+                    if newly_inserted {
+                        if let Some(defs) = self.global_defs.get(table_ref.ident()) {
+                            self.invoke_stack.push((&self.m.name, table_ref));
+                            defs.iter().for_each(|def| {
+                                if let Definition::Jumptable(jump_table) = def {
+                                    jump_table.0.labels.iter().for_each(|label| {
+                                        let locals = self.label_stack.get_locals();
+                                        let is_local =
+                                            locals.iter().any(|local| local.0 == label.ident());
+                                        if !is_local {
+                                            self.emit(AnalysisError::TableLabelNotFound {
+                                                scope: &self.m.name,
+                                                table_ref,
+                                                table_def: &jump_table.0.name,
+                                                not_found: label,
+                                            });
+                                        }
+                                    });
+                                }
+                            });
+                            self.invoke_stack.pop().unwrap();
+                        };
+                    }
+
+                    let has_code_table = self
+                        .global_defs
+                        .get(table_ref.ident())
+                        .map(|defs| {
+                            defs.iter()
+                                .any(|def| matches!(def, Definition::CodeTable(_)))
+                        })
+                        .unwrap_or(false);
+
+                    if has_code_table {
+                        self.emit(AnalysisError::NotYetSupported {
+                            intent: "__tablesize and __tableoffset for code table".to_string(),
+                            span: table_ref.1,
+                        });
+                    }
                 }
                 Invoke::BuiltinCodeSize(code_ref) | Invoke::BuiltinCodeOffset(code_ref) => {
                     if !global_exists!(self.global_defs, code_ref.ident(), Definition::Macro(_)) {
                         self.emit(AnalysisError::DefinitionNotFound {
-                            scope: self.m,
                             def_type: "macro",
                             not_found: code_ref,
                         });
@@ -283,7 +319,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                     {
                         self.emit(AnalysisError::NotYetSupported {
                             intent: "code introspection for macros with arguments".to_owned(),
-                            span: ((), code_ref.1),
+                            span: code_ref.1,
                         });
                         return;
                     }
@@ -317,7 +353,6 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                         Definition::SolFunction(_) | Definition::SolError(_)
                     ) {
                         self.emit(AnalysisError::DefinitionNotFound {
-                            scope: self.m,
                             def_type: "solidity function / error",
                             not_found: func_or_error_ref,
                         })
@@ -325,14 +360,13 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
 
                     self.emit(AnalysisError::NotYetSupported {
                         intent: "__FUNC_SIG and __ERROR".to_string(),
-                        span: ((), func_or_error_ref.1),
+                        span: func_or_error_ref.1,
                     });
                 }
                 Invoke::BuiltinEventHash(event_ref) => {
                     if !global_exists!(self.global_defs, event_ref.ident(), Definition::SolEvent(_))
                     {
                         self.emit(AnalysisError::DefinitionNotFound {
-                            scope: self.m,
                             def_type: "solidity event",
                             not_found: event_ref,
                         })
@@ -340,7 +374,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
 
                     self.emit(AnalysisError::NotYetSupported {
                         intent: "__EVENT_HASH".to_string(),
-                        span: ((), event_ref.1),
+                        span: event_ref.1,
                     });
                 }
             },
@@ -351,14 +385,14 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
 
     fn analyze_instruction(
         &mut self,
-        macro_args: &BTreeMap<&str, Vec<&Spanned<&str>>>,
+        macro_args: &BTreeMap<&str, Vec<&Text<'_>>>,
         instruction: &'ast Instruction<'src>,
     ) {
         match instruction {
             Instruction::LabelReference(label) => {
                 if !self.label_stack.contains(label.ident()) {
-                    self.emit(AnalysisError::LabelNotFound {
-                        scope: self.m,
+                    self.emit(AnalysisError::MacroLabelNotFound {
+                        scope: &self.m.name,
                         invocation_chain: self.invoke_stack.clone().into_boxed_slice(),
                         not_found: label,
                     })
@@ -379,7 +413,6 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                     Definition::Constant { .. }
                 ) {
                     self.emit(AnalysisError::DefinitionNotFound {
-                        scope: self.m,
                         def_type: "constant",
                         not_found: const_ref,
                     });
@@ -522,7 +555,7 @@ mod test {
             [&m],
             "TheRizzler",
             [AnalysisError::RecursiveMacroInvocation {
-                invocation_chain: Box::new([(&inner_macro, &("TheRizzler", span))]),
+                invocation_chain: Box::new([(&inner_macro.name, &("TheRizzler", span))]),
             }],
         );
     }
@@ -572,9 +605,9 @@ mod test {
             "VeryTop",
             [AnalysisError::RecursiveMacroInvocation {
                 invocation_chain: Box::new([
-                    (&inner_m1, &("Top", span)),
-                    (&inner_m2, &("Lower", span)),
-                    (&inner_m3, &("VeryTop", span)),
+                    (&inner_m1.name, &("Top", span)),
+                    (&inner_m2.name, &("Lower", span)),
+                    (&inner_m3.name, &("VeryTop", span)),
                 ]),
             }],
         );
@@ -601,7 +634,6 @@ mod test {
             [&m],
             "MAIN",
             [AnalysisError::DefinitionNotFound {
-                scope: &inner_macro,
                 def_type: "macro",
                 not_found: &("MY_FUNC", invoke_span),
             }],

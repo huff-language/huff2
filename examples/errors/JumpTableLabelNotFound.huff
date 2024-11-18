@@ -1,0 +1,19 @@
+#define macro MAIN() = takes(0) returns(0) {
+    ANOTHER()
+    asterix:
+}
+
+#define macro ANOTHER() = {
+    0x0 calldataload 0x0 byte          // [byte]
+    __tablesize(NICE)
+    __tablestart(NICE)
+
+    bob:
+}
+
+
+#define jumptable NICE {
+    bob
+    asterix
+}
+
