@@ -45,15 +45,21 @@ type ParserInput<'tokens, 'src> = SpannedInput<Token<'src>, Span, &'tokens [Span
 trait Parser<'tokens, 'src: 'tokens, T>:
     ChumskyParser<'tokens, ParserInput<'tokens, 'src>, T, extra::Err<Rich<'tokens, Token<'src>, Span>>>
 {
+    fn spanned(self) -> impl Parser<'tokens, 'src, Spanned<T>>;
 }
-impl<'tokens, 'src: 'tokens, P, T> Parser<'tokens, 'src, T> for P where
+
+impl<'tokens, 'src: 'tokens, P, T> Parser<'tokens, 'src, T> for P
+where
     P: ChumskyParser<
         'tokens,
         ParserInput<'tokens, 'src>,
         T,
         extra::Err<Rich<'tokens, Token<'src>, Span>>,
-    >
+    >,
 {
+    fn spanned(self) -> impl Parser<'tokens, 'src, Spanned<T>> {
+        self.map_with(|s, ex| (s, ex.span()))
+    }
 }
 
 fn root<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Root<'src>> {
@@ -65,18 +71,19 @@ fn root<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Root<'src>>
 
 fn root_section<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::RootSection<'src>> {
     let definition = definition().map(ast::RootSection::Definition);
-    let include = just(Keyword("include"))
-        .ignore_then(select! {String(s) => s}.map_with(|s, ex| (s, ex.span())))
+    let include = just(Include)
+        .ignore_then(select! {String(s) => s}.spanned())
         .map(ast::RootSection::Include);
 
     choice((definition, include))
 }
 
 fn definition<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
-    just(Keyword("define")).ignore_then(choice((
+    just(Define).ignore_then(choice((
         r#macro(),
         constant(),
-        table(),
+        code_table().map(ast::Definition::CodeTable),
+        jump_table().spanned().map(ast::Definition::Jumptable),
         sol_function(),
         sol_event(),
         sol_error(),
@@ -91,7 +98,8 @@ fn r#macro<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definiti
         .then(
             macro_args
                 .delimited_by(punct('('), punct(')'))
-                .map_with(|args, ex| (args.into_boxed_slice(), ex.span())),
+                .map(Vec::into_boxed_slice)
+                .spanned(),
         )
         .then_ignore(punct('='))
         .then(
@@ -229,7 +237,8 @@ fn invoke<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Invoke<'s
         .separated_by(punct(','))
         .collect::<Vec<_>>()
         .delimited_by(punct('('), punct(')'))
-        .map_with(|args, ex| (args.into_boxed_slice(), ex.span()));
+        .map(Vec::into_boxed_slice)
+        .spanned();
 
     let invoke_macro = ident()
         .then(invoke_macro_args)
@@ -261,7 +270,8 @@ fn constant<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definit
         just(Ident("FREE_STORAGE_POINTER"))
             .ignore_then(just(Punct('(')))
             .ignore_then(just(Punct(')')))
-            .map_with(|_, ex| (ast::ConstExpr::FreeStoragePointer, ex.span())),
+            .to(ast::ConstExpr::FreeStoragePointer)
+            .spanned(),
     ));
 
     just(Ident("constant"))
@@ -271,8 +281,8 @@ fn constant<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definit
         .map(|(name, expr)| ast::Definition::Constant { name, expr })
 }
 
-fn table<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {
-    just(Ident("table"))
+fn code_table<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::CodeTable<'src>> {
+    just(Table)
         .ignore_then(ident())
         .then(
             code()
@@ -280,13 +290,30 @@ fn table<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition
                 .collect::<Vec<_>>()
                 .delimited_by(punct('{'), punct('}')),
         )
-        .map(|(name, code)| ast::Definition::Table {
+        .map(|(name, code)| ast::CodeTable {
             name,
             data: code
                 .into_iter()
                 .flatten()
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
+        })
+}
+
+fn jump_table<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Jumptable<'src>> {
+    choice((just(JumpTable).to(32), just(JumpTablePacked).to(2)))
+        .then(ident())
+        .then(
+            ident()
+                .repeated()
+                .collect()
+                .map(|x: Vec<_>| x.into_boxed_slice())
+                .delimited_by(punct('{'), punct('}')),
+        )
+        .map(|((label_size, name), labels)| ast::Jumptable {
+            name,
+            label_size,
+            labels,
         })
 }
 
@@ -382,11 +409,11 @@ fn sol_type<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Spanned<DynS
 }
 
 fn ident<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Spanned<&'src str>> {
-    select! {Ident(s) => s}.map_with(|s, ex| (s, ex.span()))
+    select! {Ident(s) => s}.spanned()
 }
 
 fn dec<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Spanned<usize>> {
-    select! {Dec(s) => s.parse::<usize>().unwrap()}.map_with(|s, ex| (s, ex.span()))
+    select! {Dec(s) => s.parse::<usize>().unwrap()}.spanned()
 }
 
 fn word<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Spanned<U256>> {
@@ -396,7 +423,7 @@ fn word<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Spanned<U256>> {
         Dec(s) => U256::from_str_radix(s, 10)
     }
     .try_map_with(|value, ex| value.map_err(|_e| Rich::custom(ex.span(), "word overflows")))
-    .map_with(|value, ex| (value, ex.span()))
+    .spanned()
 }
 
 fn code<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Vec<u8>> {
@@ -496,12 +523,12 @@ mod tests {
 
         assert_ok!(
             root_section(),
-            vec![Keyword("include"), String("test".to_string())],
+            vec![Include, String("test".to_string())],
             ast::RootSection::Include(("test".to_string(), span))
         );
         assert_ok!(
             root_section(),
-            vec![Keyword("define"), Ident("constant"), Ident("TEST"), Punct('='), Hex("0x1")],
+            vec![Define, Ident("constant"), Ident("TEST"), Punct('='), Hex("0x1")],
             ast::RootSection::Definition(ast::Definition::Constant {
                 name: ("TEST", span),
                 expr: (ast::ConstExpr::Value(uint!(1_U256)), span)
@@ -662,30 +689,65 @@ mod tests {
     }
 
     #[test]
-    fn parse_table() {
+    fn parse_code_table() {
         let span: Span = SimpleSpan::new(0, 0);
 
         assert_ok!(
-            table(),
-            vec![Ident("table"), Ident("TEST"), Punct('{'), Hex("0xc0de"), Punct('}')],
-            ast::Definition::Table {
+            code_table(),
+            vec![Table, Ident("TEST"), Punct('{'), Hex("0xc0de"), Punct('}')],
+            ast::CodeTable {
                 name: ("TEST", span),
                 data: Box::new([0xc0, 0xde])
             }
         );
         assert_ok!(
-            table(),
-            vec![
-                Ident("table"),
-                Ident("TEST"),
-                Punct('{'),
-                Hex("0xc0de"),
-                Hex("0xcc00ddee"),
-                Punct('}')
-            ],
-            ast::Definition::Table {
+            code_table(),
+            vec![Table, Ident("TEST"), Punct('{'), Hex("0xc0de"), Hex("0xcc00ddee"), Punct('}')],
+            ast::CodeTable {
                 name: ("TEST", span),
                 data: Box::new([0xc0, 0xde, 0xcc, 0x00, 0xdd, 0xee])
+            }
+        );
+    }
+
+    #[test]
+    fn parse_jump_tale() {
+        let span: Span = SimpleSpan::new(0, 0);
+
+        assert_ok!(
+            jump_table(),
+            vec![
+                JumpTable,
+                Ident("MY_TABLE"),
+                Punct('{'),
+                Ident("label1"),
+                Ident("nice"),
+                Punct('}')
+            ],
+            ast::Jumptable {
+                name: ("MY_TABLE", span),
+                label_size: 32,
+                labels: Box::new([("label1", span), ("nice", span),])
+            }
+        );
+
+        assert_ok!(
+            jump_table(),
+            vec![JumpTable, Ident("ANOTHER_TABLE"), Punct('{'), Punct('}')],
+            ast::Jumptable {
+                name: ("ANOTHER_TABLE", span),
+                label_size: 32,
+                labels: Box::new([])
+            }
+        );
+
+        assert_ok!(
+            jump_table(),
+            vec![JumpTablePacked, Ident("PRETTY_packed"), Punct('{'), Ident("awesome"), Punct('}')],
+            ast::Jumptable {
+                name: ("PRETTY_packed", span),
+                label_size: 2,
+                labels: Box::new([("awesome", span)])
             }
         );
     }

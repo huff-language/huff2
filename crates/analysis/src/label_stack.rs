@@ -12,6 +12,11 @@ impl<'a, V> LabelStack<'a, V> {
         }
     }
 
+    pub fn get_locals(&self) -> &[(&'a str, V)] {
+        let local_start_index = *self.context_sizes.last().unwrap_or(&0);
+        &self.label_stack[local_start_index..]
+    }
+
     pub fn enter_context(&mut self) {
         self.context_sizes.push(self.label_stack.len());
     }
@@ -42,7 +47,7 @@ impl<'a, V> LabelStack<'a, V> {
             .next()
     }
 
-    pub fn contains(&mut self, label: &'a str) -> bool {
+    pub fn contains(&self, label: &'a str) -> bool {
         self.get(label).is_some()
     }
 }

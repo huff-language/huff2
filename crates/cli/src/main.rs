@@ -98,7 +98,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         RootSection::Include(huff_include) => {
             analysis_errors.push(errors::AnalysisError::NotYetSupported {
                 intent: "Huff '#include'".to_owned(),
-                span: ((), huff_include.1),
+                span: huff_include.1,
             });
             None
         }

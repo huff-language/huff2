@@ -1,11 +1,11 @@
 use ariadne::{Color, Config, Fmt, IndexType, Label, Report, ReportKind};
-use huff_ast::{Definition, IdentifiableNode, Instruction, Macro, Spanned};
+use huff_ast::{Definition, IdentifiableNode, Instruction, Macro, Span, Spanned, Text};
 
-type InvokeChain<'src, 'ast> = Box<[(&'ast Macro<'src>, &'ast Spanned<&'src str>)]>;
+type InvokeChain<'src, 'ast> = Box<[(&'ast Text<'src>, &'ast Text<'src>)]>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Inclusion<'src, 'ast: 'src> {
-    pub entry_point: Spanned<&'src str>,
+    pub entry_point: Text<'src>,
     pub invoke_stack: InvokeChain<'src, 'ast>,
     pub inclusion: Spanned<&'src str>,
 }
@@ -23,43 +23,48 @@ pub enum AnalysisError<'ast, 'src> {
     RecursiveCodeInclusion {
         linking_inclusions: Box<[Inclusion<'src, 'ast>]>,
     },
-    LabelNotFound {
-        scope: &'ast Macro<'src>,
+    MacroLabelNotFound {
+        scope: &'ast Text<'src>,
         invocation_chain: InvokeChain<'src, 'ast>,
-        not_found: &'ast Spanned<&'src str>,
+        not_found: &'ast Text<'src>,
+    },
+    TableLabelNotFound {
+        scope: &'ast Text<'src>,
+        table_ref: &'ast Text<'src>,
+        table_def: &'ast Text<'src>,
+        not_found: &'ast Text<'src>,
     },
     MacroArgNotFound {
         scope: &'ast Macro<'src>,
-        not_found: &'ast Spanned<&'src str>,
+        not_found: &'ast Text<'src>,
     },
     EntryPointNotFound {
         name: &'src str,
     },
     DefinitionNotFound {
-        scope: &'ast Macro<'src>,
         def_type: &'static str,
-        not_found: &'ast Spanned<&'src str>,
+        not_found: &'ast Text<'src>,
     },
     EntryPointHasArgs {
         target: &'ast Macro<'src>,
     },
     MacroArgumentCountMismatch {
         scope: &'ast Macro<'src>,
-        invoke: &'ast Spanned<&'src str>,
+        invoke: &'ast Text<'src>,
         args: &'ast Spanned<Box<[Instruction<'src>]>>,
         target: &'ast Macro<'src>,
     },
     DuplicateLabelDefinition {
         scope: &'ast Macro<'src>,
-        duplicates: Box<[&'ast Spanned<&'src str>]>,
+        duplicates: Box<[&'ast Text<'src>]>,
     },
     DuplicateMacroArgDefinition {
         scope: &'ast Macro<'src>,
-        duplicates: Box<[&'ast Spanned<&'src str>]>,
+        duplicates: Box<[&'ast Text<'src>]>,
     },
     NotYetSupported {
         intent: String,
-        span: Spanned<()>,
+        span: Span,
     },
 }
 
@@ -123,7 +128,7 @@ impl AnalysisError<'_, '_> {
                     })
                     .fold(base_report, |report, (is_last, scope, invoking)| {
                         let report = report.with_label(
-                            Label::new((filename.clone(), scope.name.1.into_range()))
+                            Label::new((filename.clone(), scope.1.into_range()))
                                 .with_color(Color::Red),
                         );
 
@@ -190,22 +195,20 @@ impl AnalysisError<'_, '_> {
                     .finish()
             }
             Self::DefinitionNotFound {
-                scope,
                 def_type,
                 not_found,
             } => Report::build(ReportKind::Error, filename.clone(), not_found.1.start)
                 .with_config(Config::default().with_index_type(IndexType::Byte))
                 .with_message(format!(
-                    "Definition of {} '{}' not found in macro {}",
+                    "Definition of {} '{}' not found ",
                     def_type.fg(Color::Cyan),
                     not_found.0.fg(Color::Red),
-                    scope.ident().fg(Color::Blue)
                 ))
                 .with_label(
                     Label::new((filename.clone(), not_found.1.into_range())).with_color(Color::Red),
                 )
                 .finish(),
-            Self::LabelNotFound {
+            Self::MacroLabelNotFound {
                 scope,
                 invocation_chain,
                 not_found,
@@ -221,12 +224,7 @@ impl AnalysisError<'_, '_> {
                         |(parent_scope, invoke)| {
                             [
                                 Label::new((filename.clone(), parent_scope.span().into_range()))
-                                    .with_color(Color::Yellow)
-                                    .with_message(format!(
-                                        "No label '{}' found in parent {}",
-                                        not_found.ident().fg(Color::Red),
-                                        parent_scope.ident().fg(Color::Yellow)
-                                    )),
+                                    .with_color(Color::Yellow),
                                 Label::new((filename.clone(), invoke.1.into_range())).with_color(
                                     if invoke.ident() == scope.ident() {
                                         Color::Blue
@@ -238,13 +236,12 @@ impl AnalysisError<'_, '_> {
                         },
                     ))
                     .with_label(
+                        Label::new((filename.clone(), not_found.span().into_range()))
+                            .with_color(Color::Red),
+                    )
+                    .with_label(
                         Label::new((filename.clone(), scope.span().into_range()))
-                            .with_color(Color::Blue)
-                            .with_message(format!(
-                                "No label '{}' found in {}",
-                                not_found.ident().fg(Color::Red),
-                                scope.ident().fg(Color::Blue)
-                            )),
+                            .with_color(Color::Blue),
                     )
                     .with_help(format!(
                         "Ensure you've correctly entered the label (case-sensitive) or {}",
@@ -252,6 +249,40 @@ impl AnalysisError<'_, '_> {
                     ))
                     .finish()
             }
+            Self::TableLabelNotFound {
+                scope,
+                table_ref,
+                table_def,
+                not_found,
+            } => Report::build(ReportKind::Error, filename.clone(), not_found.1.start)
+                .with_config(Config::default().with_index_type(IndexType::Byte))
+                .with_message(format!(
+                    "Jump table {} referenced label '{}' not found in direct parent macro {}",
+                    table_ref.ident().fg(Color::Magenta),
+                    not_found.ident().fg(Color::Red),
+                    scope.ident().fg(Color::Yellow)
+                ))
+                .with_label(
+                    Label::new((filename.clone(), scope.span().into_range()))
+                        .with_color(Color::Yellow),
+                )
+                .with_label(
+                    Label::new((filename.clone(), table_ref.span().into_range()))
+                        .with_color(Color::Magenta),
+                )
+                .with_label(
+                    Label::new((filename.clone(), table_def.span().into_range()))
+                        .with_color(Color::Magenta),
+                )
+                .with_label(
+                    Label::new((filename.clone(), not_found.span().into_range()))
+                        .with_color(Color::Red),
+                )
+                .with_help(concat!(
+                    "Unlike macro label references, jump tables can only reference labels in their",
+                    " direct parent macro"
+                ))
+                .finish(),
             Self::MacroArgumentCountMismatch {
                 scope: _,
                 invoke,
@@ -359,11 +390,11 @@ impl AnalysisError<'_, '_> {
                     .finish()
             }
             Self::NotYetSupported { intent, span } => {
-                Report::build(ReportKind::Error, filename.clone(), span.1.start)
+                Report::build(ReportKind::Error, filename.clone(), span.start)
                     .with_config(Config::default().with_index_type(IndexType::Byte))
                     .with_message(format!("{} is not yet supported", intent.fg(Color::Cyan),))
                     .with_label(
-                        Label::new((filename.clone(), span.1.into_range())).with_color(Color::Red),
+                        Label::new((filename.clone(), span.into_range())).with_color(Color::Red),
                     )
                     .finish()
             }
@@ -397,7 +428,7 @@ impl AnalysisError<'_, '_> {
                             |report, (scope, invoking)| {
                                 report
                                     .with_label(
-                                        Label::new((filename.clone(), scope.name.1.into_range()))
+                                        Label::new((filename.clone(), scope.1.into_range()))
                                             .with_color(Color::Red),
                                     )
                                     .with_label(
