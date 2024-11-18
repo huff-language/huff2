@@ -1,0 +1,32 @@
+#define macro MAIN() = takes(0) returns(0) {
+    0x21 calldataload                // [y]
+    0x01 calldataload                // [y, x]
+    2                                // [y, x, 2]
+    0x0 calldataload 0x0 byte        // [y, x, 2, b]
+    0x1 shl                          // [y, x, 2, b * 2]
+    __tablestart(OPS) add            // [y, x, 2, label_offset]
+    0x1e codecopy                    // [y, x]
+    0x0 mload                        // [y, x, label]
+    jump
+
+    add_op:
+        add
+        _RET()
+    sub_op:
+        sub
+        _RET()
+    mul_op:
+        mul
+        _RET()
+}
+
+#define macro _RET() = {
+    0x0 mstore
+    msize 0x0 return
+}
+
+#define jumptable__packed OPS {
+    add_op
+    sub_op
+    mul_op
+}

@@ -6,7 +6,7 @@ use evm_glue::{
 };
 use huff_analysis::label_stack::LabelStack;
 use huff_ast::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 #[derive(Debug, Clone)]
 pub struct IncludedMacro<'src> {
@@ -33,6 +33,12 @@ impl IncludedMacro<'_> {
     }
 }
 
+struct IncludedObject {
+    start_id: usize,
+    end_id: usize,
+    body: Box<[Asm]>,
+}
+
 pub fn generate_for_entrypoint<'src>(
     globals: &mut CompileGlobals<'src, '_>,
     entry_point: &Macro<'src>,
@@ -49,6 +55,8 @@ pub fn generate_for_entrypoint<'src>(
         end_id,
     });
 
+    let mut objects: Vec<IncludedObject> = Vec::with_capacity(10);
+
     let mut asm = Vec::with_capacity(10_000);
     asm.push(Asm::Mark(start_id));
     generate_for_macro(
@@ -58,6 +66,7 @@ pub fn generate_for_entrypoint<'src>(
         &mut mark_tracker,
         &mut label_stack,
         &mut included_macros,
+        &mut objects,
         &mut asm,
     );
 
@@ -71,6 +80,12 @@ pub fn generate_for_entrypoint<'src>(
         asm.push(Asm::Mark(included.start_id));
         asm.push(Asm::Data(generate_for_entrypoint(globals, section_macro)));
         asm.push(Asm::Mark(included.end_id));
+    });
+
+    objects.into_iter().for_each(|obj| {
+        asm.push(Asm::Mark(obj.start_id));
+        asm.extend(obj.body);
+        asm.push(Asm::Mark(obj.end_id));
     });
 
     asm.push(Asm::Mark(end_id));
@@ -98,6 +113,12 @@ pub fn generate_default_constructor(runtime: Vec<u8>) -> Box<[Asm]> {
     ])
 }
 
+struct IncludedJumpTable {
+    start_id: usize,
+    end_id: usize,
+}
+
+#[allow(clippy::too_many_arguments)]
 fn generate_for_macro<'src: 'cmp, 'cmp>(
     globals: &mut CompileGlobals<'src, '_>,
     current: &Macro<'src>,
@@ -105,6 +126,7 @@ fn generate_for_macro<'src: 'cmp, 'cmp>(
     mark_tracker: &mut MarkTracker,
     label_stack: &'cmp mut LabelStack<'src, usize>,
     included_macros: &'cmp mut Vec<IncludedMacro<'src>>,
+    objects: &'cmp mut Vec<IncludedObject>,
     asm: &mut Vec<Asm>,
 ) {
     let current_args: BTreeMap<&str, Asm> = BTreeMap::from_iter(
@@ -115,6 +137,8 @@ fn generate_for_macro<'src: 'cmp, 'cmp>(
             .map(|name| name.ident())
             .zip(arg_values),
     );
+
+    let mut jump_tables: HashMap<&str, IncludedJumpTable> = HashMap::with_capacity(2);
 
     label_stack.enter_context();
 
@@ -149,6 +173,7 @@ fn generate_for_macro<'src: 'cmp, 'cmp>(
                     mark_tracker,
                     label_stack,
                     included_macros,
+                    objects,
                     asm,
                 )
             }
@@ -189,6 +214,59 @@ fn generate_for_macro<'src: 'cmp, 'cmp>(
                     mref
                 };
                 asm.push(Asm::Ref(mref));
+            }
+            Invoke::BuiltinTableSize(table_ref) => {
+                let jump_table = match globals.defs.get(table_ref.ident()).unwrap() {
+                    Definition::Jumptable(jump_table) => jump_table,
+                    other_def => panic!("Unexpected table def {:?}", other_def),
+                };
+                let included_table = jump_tables.entry(table_ref.ident()).or_insert_with(|| {
+                    let start_id = mark_tracker.next_mark();
+                    let end_id = mark_tracker.next_mark();
+                    objects.push(IncludedObject {
+                        start_id,
+                        end_id,
+                        body: Box::from_iter(jump_table.0.labels.iter().map(|label| {
+                            let label_id = label_stack.get(label.ident()).unwrap();
+                            let mref = MarkRef {
+                                ref_type: RefType::Direct(*label_id),
+                                is_pushed: false,
+                                set_size: Some(jump_table.0.label_size),
+                            };
+                            Asm::Ref(mref)
+                        })),
+                    });
+                    IncludedJumpTable { start_id, end_id }
+                });
+                asm.push(Asm::delta_ref(
+                    included_table.start_id,
+                    included_table.end_id,
+                ));
+            }
+            Invoke::BuiltinTableStart(table_ref) => {
+                let jump_table = match globals.defs.get(table_ref.ident()).unwrap() {
+                    Definition::Jumptable(jump_table) => jump_table,
+                    other_def => panic!("Unexpected table def {:?}", other_def),
+                };
+                let included_table = jump_tables.entry(table_ref.ident()).or_insert_with(|| {
+                    let start_id = mark_tracker.next_mark();
+                    let end_id = mark_tracker.next_mark();
+                    objects.push(IncludedObject {
+                        start_id,
+                        end_id,
+                        body: Box::from_iter(jump_table.0.labels.iter().map(|label| {
+                            let label_id = label_stack.get(label.ident()).unwrap();
+                            let mref = MarkRef {
+                                ref_type: RefType::Direct(*label_id),
+                                is_pushed: false,
+                                set_size: Some(jump_table.0.label_size),
+                            };
+                            Asm::Ref(mref)
+                        })),
+                    });
+                    IncludedJumpTable { start_id, end_id }
+                });
+                asm.push(Asm::mref(included_table.start_id));
             }
             _ => panic!(
                 "Compilation not yet implemented for this invocation type `{:?}`",
