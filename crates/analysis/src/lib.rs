@@ -55,7 +55,7 @@ pub fn analyze_entry_point<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)
         return;
     };
 
-    if entry_point.args.0.len() != 0 {
+    if !entry_point.args.0.is_empty() {
         emit_error(AnalysisError::EntryPointHasArgs {
             target: entry_point,
         });
@@ -274,7 +274,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                     }
                     if self.global_defs.get(code_ref.ident()).is_some_and(|defs| {
                         defs.iter()
-                            .any(|def| matches!(def, Definition::Macro(m) if m.args.0.len() > 0))
+                            .any(|def| matches!(def, Definition::Macro(m) if !m.args.0.is_empty()))
                     }) {
                         self.emit(AnalysisError::NotYetSupported {
                             intent: "code introspection for macros with arguments".to_owned(),
