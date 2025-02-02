@@ -1,5 +1,5 @@
 use alloy_primitives::U256;
-use evm_glue::{assemble_maximized, assemble_minimized, utils::MarkTracker};
+use evm_glue::{assemble_maximized, assemble_minimized, evm_asm, utils::MarkTracker};
 use evm_glue::{
     assembly::{Asm, MarkRef, RefType},
     opcodes::Opcode,
@@ -79,23 +79,55 @@ pub fn generate_for_entrypoint<'src>(
 }
 
 pub fn generate_default_constructor(runtime: Vec<u8>) -> Box<[Asm]> {
-    let mut mtracker = MarkTracker::default();
-    let runtime_start = mtracker.next_mark();
-    let runtime_end = mtracker.next_mark();
-    Box::new([
-        // Constructor
-        Asm::delta_ref(runtime_start, runtime_end), // rt_size
-        Asm::Op(Opcode::DUP1),                      // rt_size, rt_size
-        Asm::mref(runtime_start),                   // rt_size, rt_size, rt_start
-        Asm::Op(Opcode::RETURNDATASIZE),            // rt_size, rt_size, rt_start, 0
-        Asm::Op(Opcode::CODECOPY),                  // rt_size
-        Asm::Op(Opcode::RETURNDATASIZE),            // rt_size, 0
-        Asm::Op(Opcode::RETURN),                    // -- end
-        // Runtime body
-        Asm::Mark(runtime_start),
-        Asm::Data(runtime),
-        Asm::Mark(runtime_end),
-    ])
+    use Opcode::*;
+
+    match runtime.len() {
+        0 => Vec::new(),
+        1..=32 => {
+            let code_push = u256_as_push(U256::from_be_slice(runtime.as_slice()));
+            let len: u8 = runtime.len().try_into().unwrap();
+
+            if len == 32 {
+                evm_asm!(
+                    Op(code_push),
+                    RETURNDATASIZE,
+                    MSTORE,
+                    MSIZE,
+                    RETURNDATASIZE,
+                    RETURN
+                )
+            } else {
+                evm_asm!(
+                    Op(code_push),
+                    RETURNDATASIZE,
+                    MSTORE,
+                    PUSH1([len]),
+                    PUSH1([32 - len]),
+                    RETURN
+                )
+            }
+        }
+        _ => {
+            let mut mtracker = MarkTracker::default();
+            let runtime_start = mtracker.next_mark();
+            let runtime_end = mtracker.next_mark();
+            evm_asm!(
+                // Constructor
+                Asm::delta_ref(runtime_start, runtime_end), // rt_size
+                DUP1,                                       // rt_size, rt_size
+                Asm::mref(runtime_start),                   // rt_size, rt_size, rt_start
+                RETURNDATASIZE,                             // rt_size, rt_size, rt_start, 0
+                CODECOPY,                                   // rt_size
+                RETURNDATASIZE,                             // rt_size, 0
+                RETURN,                                     // -- end
+                // Runtime body
+                Mark(runtime_start),
+                Data(runtime),
+                Mark(runtime_end),
+            )
+        }
+    }
+    .into_boxed_slice()
 }
 
 fn generate_for_macro<'src: 'cmp, 'cmp>(
