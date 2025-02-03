@@ -341,6 +341,10 @@ fn sol_type<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Spanned<DynS
     recursive(|sol_raw_type| {
         let sol_raw_primitive_type = ident().map(|(typ, _)| typ.to_string());
 
+        let sol_raw_event_primitive_type = ident()
+            .map(|(typ, _)| typ.to_string())
+            .then_ignore(just(Ident("indexed")));
+
         let sol_raw_tuple_type = sol_raw_type
             .separated_by(punct(','))
             .collect::<Vec<_>>()
@@ -353,26 +357,30 @@ fn sol_type<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, Spanned<DynS
                 result
             });
 
-        choice((sol_raw_primitive_type, sol_raw_tuple_type))
-            .then(
-                punct('[')
-                    .ignore_then(dec().or_not())
-                    .then_ignore(punct(']'))
-                    .or_not(),
-            )
-            .then_ignore(ident().or_not())
-            .map(|(typ, slice)| {
-                let mut result = typ;
-                if let Some(size) = slice {
-                    result.push('[');
-                    if let Some((n, _span)) = size {
-                        result.push_str(&n.to_string());
-                    }
-                    result.push(']');
+        choice((
+            sol_raw_event_primitive_type,
+            sol_raw_primitive_type,
+            sol_raw_tuple_type,
+        ))
+        .then(
+            punct('[')
+                .ignore_then(dec().or_not())
+                .then_ignore(punct(']'))
+                .or_not(),
+        )
+        .then_ignore(ident().or_not())
+        .map(|(typ, slice)| {
+            let mut result = typ;
+            if let Some(size) = slice {
+                result.push('[');
+                if let Some((n, _span)) = size {
+                    result.push_str(&n.to_string());
                 }
-                result
-            })
-            .boxed()
+                result.push(']');
+            }
+            result
+        })
+        .boxed()
     })
     .try_map_with(|typ, ex| {
         DynSolType::parse(&typ)
@@ -812,6 +820,22 @@ mod tests {
                 rets: Box::new([(DynSolType::parse("uint256").unwrap(), span)]),
             })
         );
+        assert_err!(
+            sol_function(),
+            vec![
+                Ident("function"),
+                Ident("balanceOf"),
+                Punct('('),
+                Ident("address"),
+                Ident("indexed"),
+                Punct(')'),
+                Ident("returns"),
+                Punct('('),
+                Ident("uint256"),
+                Punct(')')
+            ],
+            "word overflows"
+        );
     }
 
     #[test]
@@ -828,6 +852,33 @@ mod tests {
                 Ident("address"),
                 Punct(','),
                 Ident("uint256"),
+                Punct(')')
+            ],
+            ast::Definition::SolEvent(ast::SolEvent {
+                name: ("Transfer", span),
+                args: Box::new([
+                    (DynSolType::parse("address").unwrap(), span),
+                    (DynSolType::parse("address").unwrap(), span),
+                    (DynSolType::parse("uint256").unwrap(), span),
+                ]),
+            })
+        );
+        assert_ok!(
+            sol_event(),
+            vec![
+                Ident("event"),
+                Ident("Transfer"),
+                Punct('('),
+                Ident("address"),
+                Ident("indexed"),
+                Ident("sender"),
+                Punct(','),
+                Ident("address"),
+                Ident("indexed"),
+                Ident("recipient"),
+                Punct(','),
+                Ident("uint256"),
+                Ident("amount"),
                 Punct(')')
             ],
             ast::Definition::SolEvent(ast::SolEvent {
