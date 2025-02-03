@@ -78,6 +78,8 @@ pub fn generate_for_entrypoint<'src>(
     globals.assemble(asm.as_slice())
 }
 
+/// WARNING: Only to be used as standalone constructor, may break if added after other code due to
+/// reliance on `RETURNDATASIZE` being `0`.
 pub fn generate_default_constructor(runtime: Vec<u8>) -> Box<[Asm]> {
     use Opcode::*;
 
