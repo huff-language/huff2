@@ -24,3 +24,10 @@ chumsky = { git = "https://github.com/zesterer/chumsky.git", rev = "716bec8" }
 [profile.profiling]
 inherits = "release"
 debug = true
+
+
+[profile.release]
+opt-level = "z"   # Optimize for size ("z" is smaller than "s")
+lto = true        # Enable Link Time Optimization
+codegen-units = 1 # Better optimizations, slower compile
+panic = "abort"   # Remove unwinding machinery
