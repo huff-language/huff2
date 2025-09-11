@@ -9,7 +9,7 @@ use chumsky::{
 use std::fmt;
 
 /// Lex the given source code string into tokens.
-pub(crate) fn lex(src: &str) -> Result<Vec<Spanned<Token>>, Vec<Rich<'_, Token<'_>>>> {
+pub(crate) fn lex<'a>(src: &'a str) -> Result<Vec<Spanned<Token<'a>>>, Vec<Rich<'a, Token<'a>>>> {
     lexer().parse(src).into_result().map_err(|e| {
         e.into_iter()
             .map(|errs| errs.map_token(Token::Error))

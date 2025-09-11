@@ -249,7 +249,7 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                     if !global_exists!(
                         self.global_defs,
                         table_ref.ident(),
-                        Definition::Table { .. } | Definition::Jumptable(_)
+                        Definition::CodeTable { .. } | Definition::Jumptable(_)
                     ) {
                         self.emit(AnalysisError::DefinitionNotFound {
                             scope: self.m,
@@ -258,10 +258,16 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                         })
                     }
 
-                    self.emit(AnalysisError::NotYetSupported {
-                        intent: "__tablesize and __tableoffset".to_string(),
-                        span: ((), table_ref.1),
-                    });
+                    if global_exists!(
+                        self.global_defs,
+                        table_ref.ident(),
+                        Definition::Jumptable(_)
+                    ) {
+                        self.emit(AnalysisError::NotYetSupported {
+                            intent: "__tablesize and __tableoffset on jumptable".to_string(),
+                            span: ((), table_ref.1),
+                        });
+                    }
                 }
                 Invoke::BuiltinCodeSize(code_ref) | Invoke::BuiltinCodeOffset(code_ref) => {
                     if !global_exists!(self.global_defs, code_ref.ident(), Definition::Macro(_)) {
@@ -473,7 +479,7 @@ mod test {
             expr: (ConstExpr::FreeStoragePointer, span),
         };
 
-        let unrelated_table = Definition::Table {
+        let unrelated_table = Definition::CodeTable {
             name: ("awesome_stuff", span),
             data: Box::new([0x00, 0x01]),
         };
