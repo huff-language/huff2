@@ -13,8 +13,6 @@ in Rust. It comes with:
 - [ ] Jump tables
     - [ ] parsing
     - [ ] builtins (`__tablestart`, `__tablesize`)
-- [ ] Code tables
-    - [ ] builtins (`__tablestart`, `__tablesize`)
 - [ ] ABI builtins (`__FUNC_SIG`, `__EVEN_HASH`, `__ERROR`)
 - [ ] Imports (`#include` statements)
 
