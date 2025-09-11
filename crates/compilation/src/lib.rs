@@ -42,6 +42,11 @@ struct IncludedCodeTable<'src, 'ast> {
     data: &'ast [u8],
 }
 
+struct ProgramDataDeps<'src, 'ast> {
+    included_macros: Vec<IncludedMacro<'src>>,
+    included_code_tables: Vec<IncludedCodeTable<'src, 'ast>>,
+}
+
 impl<'src, 'ast> IncludedCodeTable<'src, 'ast> {
     fn size_ref(&self) -> MarkRef {
         MarkRef {
@@ -75,7 +80,7 @@ pub fn generate_for_entrypoint<'src, 'ast: 'src>(
         start_id,
         end_id,
     });
-    let mut included_code_tables: Vec<IncludedCodeTable<'src, 'ast>> = globals
+    let included_code_tables: Vec<IncludedCodeTable<'src, 'ast>> = globals
         .defs
         .iter()
         .filter_map(|(_, def)| {
@@ -92,6 +97,11 @@ pub fn generate_for_entrypoint<'src, 'ast: 'src>(
         })
         .collect();
 
+    let mut program_data_deps = ProgramDataDeps {
+        included_macros,
+        included_code_tables,
+    };
+
     let mut asm = Vec::with_capacity(10_000);
     asm.push(Asm::Mark(start_id));
     generate_for_macro(
@@ -100,24 +110,28 @@ pub fn generate_for_entrypoint<'src, 'ast: 'src>(
         Box::new([]),
         &mut mark_tracker,
         &mut label_stack,
-        &mut included_macros,
-        &mut included_code_tables,
+        &mut program_data_deps,
         &mut asm,
     );
 
-    included_macros.into_iter().skip(1).for_each(|included| {
-        let section_macro =
-            if let Some(Definition::Macro(section_macro)) = globals.defs.get(included.name) {
-                section_macro
-            } else {
-                panic!("Section macro {} not found", included.name);
-            };
-        asm.push(Asm::Mark(included.start_id));
-        asm.push(Asm::Data(generate_for_entrypoint(globals, section_macro)));
-        asm.push(Asm::Mark(included.end_id));
-    });
+    program_data_deps
+        .included_macros
+        .into_iter()
+        .skip(1)
+        .for_each(|included| {
+            let section_macro =
+                if let Some(Definition::Macro(section_macro)) = globals.defs.get(included.name) {
+                    section_macro
+                } else {
+                    panic!("Section macro {} not found", included.name);
+                };
+            asm.push(Asm::Mark(included.start_id));
+            asm.push(Asm::Data(generate_for_entrypoint(globals, section_macro)));
+            asm.push(Asm::Mark(included.end_id));
+        });
 
-    included_code_tables
+    program_data_deps
+        .included_code_tables
         .into_iter()
         .filter(|t| t.referenced)
         .for_each(|included| {
@@ -191,8 +205,7 @@ fn generate_for_macro<'src: 'cmp, 'cmp, 'ast>(
     arg_values: Box<[Asm]>,
     mark_tracker: &mut MarkTracker,
     label_stack: &'cmp mut LabelStack<'src, usize>,
-    included_macros: &'cmp mut Vec<IncludedMacro<'src>>,
-    included_code_tables: &'cmp mut Vec<IncludedCodeTable<'src, 'ast>>,
+    program_data_deps: &'cmp mut ProgramDataDeps<'src, 'ast>,
     asm: &mut Vec<Asm>,
 ) {
     let current_args: BTreeMap<&str, Asm> = BTreeMap::from_iter(
@@ -236,14 +249,15 @@ fn generate_for_macro<'src: 'cmp, 'cmp, 'ast>(
                         .collect(),
                     mark_tracker,
                     label_stack,
-                    included_macros,
-                    included_code_tables,
+                    program_data_deps,
                     asm,
                 )
             }
             Invoke::BuiltinCodeSize(code_ref) => {
-                let mref: MarkRef = if let Some(included) =
-                    included_macros.iter().find(|m| m.name == code_ref.ident())
+                let mref: MarkRef = if let Some(included) = program_data_deps
+                    .included_macros
+                    .iter()
+                    .find(|m| m.name == code_ref.ident())
                 {
                     included.size_ref()
                 } else {
@@ -255,14 +269,16 @@ fn generate_for_macro<'src: 'cmp, 'cmp, 'ast>(
                         end_id,
                     };
                     let mref = included.size_ref();
-                    included_macros.push(included);
+                    program_data_deps.included_macros.push(included);
                     mref
                 };
                 asm.push(Asm::Ref(mref));
             }
             Invoke::BuiltinCodeOffset(code_ref) => {
-                let mref: MarkRef = if let Some(included) =
-                    included_macros.iter().find(|m| m.name == code_ref.ident())
+                let mref: MarkRef = if let Some(included) = program_data_deps
+                    .included_macros
+                    .iter()
+                    .find(|m| m.name == code_ref.ident())
                 {
                     included.start_ref()
                 } else {
@@ -274,13 +290,14 @@ fn generate_for_macro<'src: 'cmp, 'cmp, 'ast>(
                         end_id,
                     };
                     let mref = included.start_ref();
-                    included_macros.push(included);
+                    program_data_deps.included_macros.push(included);
                     mref
                 };
                 asm.push(Asm::Ref(mref));
             }
             Invoke::BuiltinTableStart(table_ref) => {
-                let target_table = included_code_tables
+                let target_table = program_data_deps
+                    .included_code_tables
                     .iter_mut()
                     .find(|t| t.name == table_ref.ident())
                     .expect("Table not found (might be jumptable)");
@@ -288,7 +305,8 @@ fn generate_for_macro<'src: 'cmp, 'cmp, 'ast>(
                 asm.push(Asm::Ref(target_table.start_ref()));
             }
             Invoke::BuiltinTableSize(table_ref) => {
-                let target_table = included_code_tables
+                let target_table = program_data_deps
+                    .included_code_tables
                     .iter_mut()
                     .find(|t| t.name == table_ref.ident())
                     .expect("Table not found (might be jumptable)");
