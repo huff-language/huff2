@@ -1,0 +1,28 @@
+#define macro CONSTRUCTOR() = {
+    0x1 0x0 sstore
+    __codesize(MAIN)
+    dup1
+    __codeoffset(MAIN)
+    0x0
+    codecopy
+    0x0
+    return
+}
+
+
+
+
+#define macro MAIN() = takes(0) returns(0) {
+    __tablestart(CODE)
+    __tablestart(WOW)
+    
+    __tablesize(CODE)
+}
+
+#define table CODE {
+    0xaa11bb0000000000000000000000000000000000000000000000000000000000000000
+}
+
+#define table WOW {
+    0x123456
+}

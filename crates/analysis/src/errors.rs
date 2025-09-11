@@ -63,8 +63,8 @@ pub enum AnalysisError<'ast, 'src> {
     },
 }
 
-impl AnalysisError<'_, '_> {
-    pub fn report(&self, filename: String) -> Report<(String, std::ops::Range<usize>)> {
+impl<'ast, 'src> AnalysisError<'ast, 'src> {
+    pub fn report(&self, filename: String) -> Report<'_, (String, std::ops::Range<usize>)> {
         match self {
             Self::DefinitionNameCollision {
                 collided,

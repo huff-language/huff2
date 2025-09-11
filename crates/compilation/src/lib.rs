@@ -27,14 +27,41 @@ impl IncludedMacro<'_> {
     fn start_ref(&self) -> MarkRef {
         MarkRef {
             ref_type: RefType::Direct(self.start_id),
+
             is_pushed: true,
             set_size: None,
         }
     }
 }
 
-pub fn generate_for_entrypoint<'src>(
-    globals: &mut CompileGlobals<'src, '_>,
+struct IncludedCodeTable<'src, 'ast> {
+    name: &'src str,
+    referenced: bool,
+    start_id: usize,
+    end_id: usize,
+    data: &'ast [u8],
+}
+
+impl<'src, 'ast> IncludedCodeTable<'src, 'ast> {
+    fn size_ref(&self) -> MarkRef {
+        MarkRef {
+            ref_type: RefType::Delta(self.start_id, self.end_id),
+            is_pushed: true,
+            set_size: None,
+        }
+    }
+
+    fn start_ref(&self) -> MarkRef {
+        MarkRef {
+            ref_type: RefType::Direct(self.start_id),
+            is_pushed: true,
+            set_size: None,
+        }
+    }
+}
+
+pub fn generate_for_entrypoint<'src, 'ast: 'src>(
+    globals: &mut CompileGlobals<'src, 'ast>,
     entry_point: &Macro<'src>,
 ) -> Vec<u8> {
     let mut mark_tracker = MarkTracker::default();
@@ -48,6 +75,22 @@ pub fn generate_for_entrypoint<'src>(
         start_id,
         end_id,
     });
+    let mut included_code_tables: Vec<IncludedCodeTable<'src, 'ast>> = globals
+        .defs
+        .iter()
+        .filter_map(|(_, def)| {
+            let Definition::CodeTable { name, data } = def else {
+                return None;
+            };
+            Some(IncludedCodeTable {
+                name: name.ident(),
+                referenced: false,
+                data,
+                start_id: mark_tracker.next_mark(),
+                end_id: mark_tracker.next_mark(),
+            })
+        })
+        .collect();
 
     let mut asm = Vec::with_capacity(10_000);
     asm.push(Asm::Mark(start_id));
@@ -58,6 +101,7 @@ pub fn generate_for_entrypoint<'src>(
         &mut mark_tracker,
         &mut label_stack,
         &mut included_macros,
+        &mut included_code_tables,
         &mut asm,
     );
 
@@ -72,6 +116,15 @@ pub fn generate_for_entrypoint<'src>(
         asm.push(Asm::Data(generate_for_entrypoint(globals, section_macro)));
         asm.push(Asm::Mark(included.end_id));
     });
+
+    included_code_tables
+        .into_iter()
+        .filter(|t| t.referenced)
+        .for_each(|included| {
+            asm.push(Asm::Mark(included.start_id));
+            asm.push(Asm::Data(included.data.to_vec()));
+            asm.push(Asm::Mark(included.end_id));
+        });
 
     asm.push(Asm::Mark(end_id));
 
@@ -132,13 +185,14 @@ pub fn generate_default_constructor(runtime: Vec<u8>) -> Box<[Asm]> {
     .into_boxed_slice()
 }
 
-fn generate_for_macro<'src: 'cmp, 'cmp>(
-    globals: &mut CompileGlobals<'src, '_>,
+fn generate_for_macro<'src: 'cmp, 'cmp, 'ast>(
+    globals: &mut CompileGlobals<'src, 'ast>,
     current: &Macro<'src>,
     arg_values: Box<[Asm]>,
     mark_tracker: &mut MarkTracker,
     label_stack: &'cmp mut LabelStack<'src, usize>,
     included_macros: &'cmp mut Vec<IncludedMacro<'src>>,
+    included_code_tables: &'cmp mut Vec<IncludedCodeTable<'src, 'ast>>,
     asm: &mut Vec<Asm>,
 ) {
     let current_args: BTreeMap<&str, Asm> = BTreeMap::from_iter(
@@ -183,6 +237,7 @@ fn generate_for_macro<'src: 'cmp, 'cmp>(
                     mark_tracker,
                     label_stack,
                     included_macros,
+                    included_code_tables,
                     asm,
                 )
             }
@@ -223,6 +278,22 @@ fn generate_for_macro<'src: 'cmp, 'cmp>(
                     mref
                 };
                 asm.push(Asm::Ref(mref));
+            }
+            Invoke::BuiltinTableStart(table_ref) => {
+                let target_table = included_code_tables
+                    .iter_mut()
+                    .find(|t| t.name == table_ref.ident())
+                    .expect("Table not found (might be jumptable)");
+                target_table.referenced = true;
+                asm.push(Asm::Ref(target_table.start_ref()));
+            }
+            Invoke::BuiltinTableSize(table_ref) => {
+                let target_table = included_code_tables
+                    .iter_mut()
+                    .find(|t| t.name == table_ref.ident())
+                    .expect("Table not found (might be jumptable)");
+                target_table.referenced = true;
+                asm.push(Asm::Ref(target_table.size_ref()));
             }
             _ => panic!(
                 "Compilation not yet implemented for this invocation type `{:?}`",

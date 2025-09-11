@@ -1,0 +1,27 @@
+#define constant OWNABLE_SLOT = FREE_STORAGE_POINTER()
+
+#define macro CONSTRUCTOR() = {
+    caller [OWNABLE_SLOT] sstore
+    _RETURN_MAIN()
+}
+
+#define macro _RETURN_MAIN() = {
+    __codesize(MAIN)        // [size]
+    dup1                    // [size, size]
+    __codeoffset(MAIN)      // [offset, size, size]
+    0x0                     // [0, offset, size, size]
+    codecopy                // [size]
+    0x0                     // [0, size]
+    return                  // []
+}
+
+#define macro MAIN() = {
+    [OWNABLE_SLOT] sload    // [owner]
+    caller                  // [msg.sender, owner]
+    eq                      // [msg.sender == owner]
+    is_owner jumpi          // []
+        0x0 0x0 revert
+    is_owner:
+
+    stop
+}
