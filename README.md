@@ -13,7 +13,7 @@ in Rust. It comes with:
 - [ ] Jump tables
     - [ ] parsing
     - [ ] builtins (`__tablestart`, `__tablesize`)
-- [ ] ABI builtins (`__FUNC_SIG`, `__EVEN_HASH`, `__ERROR`)
+- [ ] ABI builtins (`__EVEN_HASH`, `__ERROR`)
 - [ ] Imports (`#include` statements)
 
 ## Why rewrite `huff-rs`?

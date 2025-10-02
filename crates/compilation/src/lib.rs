@@ -313,6 +313,19 @@ fn generate_for_macro<'src: 'cmp, 'cmp, 'ast>(
                 target_table.referenced = true;
                 asm.push(Asm::Ref(target_table.size_ref()));
             }
+            Invoke::BuiltinFuncSig(func) => {
+                let Definition::SolFunction(sol_func) = globals.defs[func.ident()] else {
+                    unreachable!(
+                        "Reached codegen even though \"{}\" not found in global defs",
+                        func.ident()
+                    )
+                };
+                let selector = compute_selector(&sol_func.name, &sol_func.args);
+                asm.push(u256_to_asm(
+                    U256::from_be_slice(selector.as_slice()),
+                    globals.allow_push0,
+                ));
+            }
             _ => panic!(
                 "Compilation not yet implemented for this invocation type `{:?}`",
                 invoke

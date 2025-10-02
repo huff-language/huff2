@@ -1,0 +1,86 @@
+#define function mineAngstromHookAddress(address owner) public returns (bytes32)
+#define function HOOK_INITCODE_STORE() public view returns (address)
+
+#define constant UNI_V4 = 0xc1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1
+#define constant CREATOR_ADDRESS_WITH_LEAD_BYTE = 0xff3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a
+#define constant DESIRED_HOOK_FLAGS = 0xffff
+#define constant RETAIN_ONLY_HOOK_FLAGS_SHIFT = 242 // 256 - 14
+
+#define macro RUNTIME() = {
+    VALIDATE_SELECTOR()
+    GET_CREATECODE_STORE()   // [createcode_store]
+    COMPUTE_INITCODE_HASH()  // [initcode_hash]
+
+    MINE()                   // [salt]
+    RETURN_SALT()
+
+    simple_revert:
+        0x0 0x0 revert
+}
+
+
+
+#define macro MINE() = takes(1) returns(1) {
+    // entry stack:                                  [initicode_hash]
+    0x40 mstore                                   // []
+    [CREATOR_ADDRESS_WITH_LEAD_BYTE] 0x00 mstore  // []
+    0x0                                           // [salt]
+    next_mining_cycle:                            // [salt]
+        1 add                                     // [salt]
+        dup1 0x20 mstore                          // [salt]
+        0x55 0xb sha3                             // [salt, hash]
+        [DESIRED_HOOK_FLAGS] xor                  // [salt, hash ^ flags]
+        [RETAIN_ONLY_HOOK_FLAGS_SHIFT] shl        // [salt, selected_flags]
+    // Continue mining until address with desired flags is found.
+    next_mining_cycle jumpi                       // [salt]
+        0x55 0xb sha3                             // [salt, dirty_addr]
+        extcodesize                               // [salt, dirty_addr.codesize]
+    // Continue mining if found address is already deployed.
+    next_mining_cycle jumpi                       // [salt]
+    // returns:                                      [salt]
+}
+
+
+#define macro VALIDATE_SELECTOR() = takes(0) returns(0) {
+    0x0 calldataload 0xe0 shr
+    __FUNC_SIG(mineAngstromHookAddress) xor simple_revert jumpi
+}
+
+#define macro COMPUTE_INITCODE_HASH() = takes(1) returns(1) {
+    // takes:                         [createcode_store]
+    0x1 dup2                       // [createcode_store, 1, createcode_store]
+    extcodesize sub                // [createcode_store, size := createcode_store.codesize - 1]
+    0x1 0x0                        // [createcode_store, size, 1, 0]
+    dup3                           // [createcode_store, size, 1, 0, size]
+    swap4                          // [size, size, 1, 0, createcode_store]
+    extcodecopy                    // [size]
+    // Encode `(address, address)` initcode args.
+    [UNI_V4] dup2 mstore           // [size]
+    LOAD_INITIAL_OWNER() dup2      // [size, initial_owner, size]
+    0x20 add mstore                // [size]
+    0x40 add                       // [encoded_size]
+    0x0 sha3                       // [initcode_hash]
+}
+
+
+#define macro GET_CREATECODE_STORE() = takes(0) returns(1) {
+    // Encode `HOOK_INITCODE_STORE()`.
+    __FUNC_SIG(HOOK_INITCODE_STORE) 0x0 mstore
+    // Call `HOOK_INITCODE_STORE()` expecting encoded `(address,)` as return data.
+    0x20 0x0 0x04 0x1c caller gas staticcall
+    // Check call success.
+    iszero simple_revert jumpi
+    // Load address to stack
+    0x0 mload
+}
+
+// Loads `(address)` from the encoded `mineAngstromHookAddress(address)` payload.
+#define macro LOAD_INITIAL_OWNER() = takes(0) returns(1) {
+    0x04 calldataload
+}
+
+#define macro RETURN_SALT() = takes(1) returns(0) {
+    // takes:              [salt]
+    0x0 mstore          // []
+    0x20 0x0 return     // []
+}

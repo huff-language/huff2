@@ -310,8 +310,16 @@ impl<'a, 'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 'src>)> MacroAnalysis<'a
                         });
                     }
                 }
-                Invoke::BuiltinFuncSig(func_or_error_ref)
-                | Invoke::BuiltinError(func_or_error_ref) => {
+                Invoke::BuiltinFuncSig(func) => {
+                    if !global_exists!(self.global_defs, func.ident(), Definition::SolFunction(_)) {
+                        self.emit(AnalysisError::DefinitionNotFound {
+                            scope: self.m,
+                            def_type: "ABI function",
+                            not_found: func,
+                        })
+                    }
+                }
+                Invoke::BuiltinError(func_or_error_ref) => {
                     if !global_exists!(
                         self.global_defs,
                         func_or_error_ref.ident(),
