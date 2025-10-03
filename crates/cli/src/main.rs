@@ -36,14 +36,6 @@ struct CliArguments {
     evm_version: EvmVersion,
 
     #[clap(
-        short = 'z',
-        long = "optimize",
-        help = "Optimize the resulting assembly. NOTE: Currently only toggles minimization of push opcodes for label references",
-        default_value_t = true
-    )]
-    optimize: bool,
-
-    #[clap(
         short = 'c',
         long = "constant",
         value_parser = parse_constant_override,
@@ -154,7 +146,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut config = CompileGlobals::new(
-        args.optimize,
+        true,
         args.evm_version.allows_push0(),
         unique_defs,
         &args.constant_overrides,
