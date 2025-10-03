@@ -47,7 +47,7 @@ struct CliArguments {
         short = 'c',
         long = "constant",
         value_parser = parse_constant_override,
-        help = "Optimize the resulting assembly. NOTE: Currently only toggles minimization of push opcodes for label references"
+        help = "Add override to list in format <CONSTANT_NAME>=<HEX/DEC VALUE>"
     )]
     constant_overrides: Vec<ConstantOverride>,
 }
