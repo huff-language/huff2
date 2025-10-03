@@ -55,13 +55,6 @@ struct CliArguments {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = CliArguments::parse();
 
-    if matches!(cli.evm_version, EvmVersion::Eof) {
-        eprintln!(
-            "{}: EVM Version 'EOF' not yet supported",
-            "Error".fg(Color::Red),
-        );
-        std::process::exit(1);
-    }
     let src_res = std::fs::read_to_string(&args.filename);
 
     if let Err(err) = &src_res {
