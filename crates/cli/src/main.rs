@@ -1,6 +1,6 @@
 use ariadne::{sources, Color, Config, Fmt, IndexType, Label, Report, ReportKind};
 use clap::Parser as ClapParser;
-use huff_analysis::*;
+use huff_analysis::{const_overrides::*, *};
 use huff_ast::{parse, RootSection};
 use huff_compilation::{generate_default_constructor, generate_for_entrypoint, CompileGlobals};
 use std::collections::BTreeSet;
@@ -10,7 +10,7 @@ use versions::EvmVersion;
 
 /// Huff Language Compiler
 #[derive(ClapParser)]
-struct Cli {
+struct CliArguments {
     /// filename
     #[clap(help = "Root huff file to compile")]
     filename: String,
@@ -23,7 +23,7 @@ struct Cli {
     #[clap(
         short = 'f',
         long = "default-constructor",
-        help = "whether to wrap target entry point code in a minimal constructor"
+        help = "wraps target entry point code in a minimal constructor that deploys it"
     )]
     add_default_constructor: bool,
 
@@ -38,14 +38,22 @@ struct Cli {
     #[clap(
         short = 'z',
         long = "optimize",
-        help = "Whether to optimize the resulting assembly. NOTE: Currently only toggles minimization of push opcodes for label references",
+        help = "Optimize the resulting assembly. NOTE: Currently only toggles minimization of push opcodes for label references",
         default_value_t = true
     )]
     optimize: bool,
+
+    #[clap(
+        short = 'c',
+        long = "constant",
+        value_parser = parse_constant_override,
+        help = "Optimize the resulting assembly. NOTE: Currently only toggles minimization of push opcodes for label references"
+    )]
+    constant_overrides: Vec<ConstantOverride>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli = Cli::parse();
+    let args = CliArguments::parse();
 
     if matches!(cli.evm_version, EvmVersion::Eof) {
         eprintln!(
@@ -54,23 +62,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         std::process::exit(1);
     }
-
-    let src_res = std::fs::read_to_string(&cli.filename);
+    let src_res = std::fs::read_to_string(&args.filename);
 
     if let Err(err) = &src_res {
         if let std::io::ErrorKind::NotFound = err.kind() {
             eprintln!(
                 "{}: File with path '{}' not found",
                 "Error".fg(Color::Red),
-                cli.filename.escape_debug()
+                args.filename.escape_debug()
             );
             std::process::exit(1);
         }
     };
 
+    {
+        let mut unique_overrids = BTreeSet::new();
+        let mut found_duplicate = false;
+        for const_override in &args.constant_overrides {
+            if !unique_overrids.insert(const_override.name.as_str()) {
+                eprintln!(
+                    "{}: Duplicate override for constant {}",
+                    "Error".fg(Color::Red),
+                    const_override.name.as_str().fg(Color::Yellow)
+                );
+                found_duplicate = true;
+            }
+        }
+        if found_duplicate {
+            std::process::exit(1);
+        }
+    }
+
     let src = src_res?;
 
-    let filename: String = cli.filename;
+    let filename: String = args.filename;
 
     let ast = match parse(&src) {
         Ok(ast) => ast,
@@ -105,9 +130,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         RootSection::Definition(def) => Some(def),
     }));
     let unique_defs = analyze_global_for_dups(&global_defs, |err| analysis_errors.push(err));
+    verify_constants_to_be_overriden_defined(&global_defs, &args.constant_overrides, |err| {
+        analysis_errors.push(err)
+    });
 
     {
-        let mut to_analyze_stack = vec![CodeInclusionFrame::top(cli.entry_point.as_str())];
+        let mut to_analyze_stack = vec![CodeInclusionFrame::top(args.entry_point.as_str())];
         let mut analyzed_macros = BTreeSet::new();
         while let Some(next_entrypoint) = to_analyze_stack.last() {
             let idx_to_remove = to_analyze_stack.len() - 1;
@@ -132,14 +160,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     }
 
-    let mut config = CompileGlobals::new(cli.optimize, cli.evm_version.allows_push0(), unique_defs);
+    let mut config = CompileGlobals::new(
+        args.optimize,
+        args.evm_version.allows_push0(),
+        unique_defs,
+        &args.constant_overrides,
+    );
 
-    let entry_point_macro = match config.defs.get(cli.entry_point.as_str()) {
+    let entry_point_macro = match config.defs.get(args.entry_point.as_str()) {
         Some(huff_ast::Definition::Macro(entry_point)) => entry_point,
         _ => panic!("macro not found despite no errors in analysis"),
     };
     let mut entry_point_code = generate_for_entrypoint(&mut config, entry_point_macro);
-    if cli.add_default_constructor {
+    if args.add_default_constructor {
         entry_point_code = config.assemble(&generate_default_constructor(entry_point_code));
     }
 

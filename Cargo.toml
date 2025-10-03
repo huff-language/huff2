@@ -10,6 +10,7 @@ license = "MIT"
 [workspace.dependencies]
 
 # workspace
+huff-cli = { path = "crates/cli" }
 huff-ast = { path = "crates/ast" }
 huff-analysis = { path = "crates/analysis" }
 huff-compilation = { path = "crates/compilation" }

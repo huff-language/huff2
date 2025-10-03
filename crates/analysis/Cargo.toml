@@ -7,6 +7,7 @@ license.workspace = true
 [dependencies]
 huff-ast.workspace = true
 ariadne.workspace = true
+alloy-primitives.workspace = true
 
 [dev-dependencies]
 chumsky.workspace = true

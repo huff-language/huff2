@@ -13,12 +13,15 @@ pub enum RootSection<'src> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Constant<'src> {
+    pub name: Spanned<&'src str>,
+    pub expr: Spanned<ConstExpr>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Definition<'src> {
     Macro(Macro<'src>),
-    Constant {
-        name: Spanned<&'src str>,
-        expr: Spanned<ConstExpr>,
-    },
+    Constant(Constant<'src>),
     Jumptable(Jumptable<'src>),
     CodeTable {
         name: Spanned<&'src str>,
@@ -45,7 +48,7 @@ impl<'src> IdentifiableNode<'src> for Definition<'src> {
     fn spanned(&self) -> &Spanned<&'src str> {
         match self {
             Self::Macro(m) => &m.name,
-            Self::Constant { name, .. } => name,
+            Self::Constant(c) => &c.name,
             Self::Jumptable(jt) => &jt.name,
             Self::CodeTable { name, .. } => name,
             Self::SolEvent(e) => &e.name,

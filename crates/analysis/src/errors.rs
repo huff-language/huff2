@@ -17,6 +17,9 @@ pub enum AnalysisError<'ast, 'src> {
         collided: Box<[&'ast Definition<'src>]>,
         duplicate_name: &'src str,
     },
+    NoConstantToOverride {
+        name: &'ast str,
+    },
     RecursiveMacroInvocation {
         invocation_chain: InvokeChain<'src, 'ast>,
     },
@@ -92,6 +95,14 @@ impl<'ast, 'src> AnalysisError<'ast, 'src> {
                     .with_help(format!(
                         "Change the names of the duplicate {}",
                         "definitions so that they're no longer equal."
+                    ))
+                    .finish()
+            }
+            Self::NoConstantToOverride { name } => {
+                Report::build(ReportKind::Error, filename.clone(), 0)
+                    .with_message(format!(
+                        "Constant {} to be overriden not found",
+                        name.fg(Color::Yellow)
                     ))
                     .finish()
             }

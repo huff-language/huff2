@@ -2,7 +2,6 @@
 #define function HOOK_INITCODE_STORE() public view returns (address)
 
 #define constant UNI_V4 = 0xc1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1
-#define constant CREATOR_ADDRESS_WITH_LEAD_BYTE = 0xff3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a
 #define constant DESIRED_HOOK_FLAGS = 0xffff
 #define constant RETAIN_ONLY_HOOK_FLAGS_SHIFT = 242 // 256 - 14
 
@@ -23,8 +22,9 @@
 #define macro MINE() = takes(1) returns(1) {
     // entry stack:                                  [initicode_hash]
     0x40 mstore                                   // []
-    [CREATOR_ADDRESS_WITH_LEAD_BYTE] 0x00 mstore  // []
-    0x0                                           // [salt]
+    caller 0x00 mstore                            // []
+    0xff 0x0b mstore8                             // []
+    number                                        // [salt := block.number]
     next_mining_cycle:                            // [salt]
         1 add                                     // [salt]
         dup1 0x20 mstore                          // [salt]
@@ -38,6 +38,14 @@
     // Continue mining if found address is already deployed.
     next_mining_cycle jumpi                       // [salt]
     // returns:                                      [salt]
+}
+
+#define macro HASH_AND_SELECT_FLAGS() = takes(1) returns(1) {
+    // takes:                                    [salt]
+    0x20 mstore                               // []
+    0x55 0xb sha3                             // [hash]
+    [DESIRED_HOOK_FLAGS] xor                  // [hash ^ flags]
+    // returns:                                  [hash_with_selected_lower]
 }
 
 

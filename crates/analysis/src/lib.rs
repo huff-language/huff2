@@ -1,6 +1,8 @@
+pub mod const_overrides;
 pub mod errors;
 pub mod label_stack;
 
+use crate::const_overrides::ConstantOverride;
 use crate::errors::{AnalysisError, Inclusion};
 use crate::label_stack::LabelStack;
 use huff_ast::{Definition, IdentifiableNode, Instruction, Invoke, Macro, MacroStatement, Spanned};
@@ -24,6 +26,29 @@ pub fn analyze_global_for_dups<'src, 'ast: 'src, E: FnMut(AnalysisError<'ast, 's
             }
         })
         .collect()
+}
+
+pub fn verify_constants_to_be_overriden_defined<'src, 'ast: 'src, E>(
+    global_defs: &BTreeMap<&'src str, Vec<&'ast Definition<'src>>>,
+    overrides: &'ast [ConstantOverride],
+    mut emit_error: E,
+) where
+    E: FnMut(AnalysisError<'ast, 'src>),
+{
+    for const_override in overrides {
+        let name = const_override.name.as_str();
+        let const_exists = global_defs.get(name).is_some_and(|defs| {
+            defs.iter().any(|&inner_def| {
+                matches!(
+                    inner_def,
+                    Definition::Constant(c) if c.name.ident() == name
+                )
+            })
+        });
+        if !const_exists {
+            emit_error(AnalysisError::NoConstantToOverride { name })
+        }
+    }
 }
 
 fn get_macro_def<'src, 'ast: 'src>(

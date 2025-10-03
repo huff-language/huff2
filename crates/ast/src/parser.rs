@@ -268,7 +268,7 @@ fn constant<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definit
         .ignore_then(ident())
         .then_ignore(punct('='))
         .then(const_expr)
-        .map(|(name, expr)| ast::Definition::Constant { name, expr })
+        .map(|(name, expr)| ast::Definition::Constant(ast::Constant { name, expr }))
 }
 
 fn table<'tokens, 'src: 'tokens>() -> impl Parser<'tokens, 'src, ast::Definition<'src>> {

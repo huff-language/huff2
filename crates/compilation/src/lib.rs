@@ -4,6 +4,7 @@ use evm_glue::{
     assembly::{Asm, MarkRef, RefType},
     opcodes::Opcode,
 };
+use huff_analysis::const_overrides::ConstantOverride;
 use huff_analysis::label_stack::LabelStack;
 use huff_ast::*;
 use std::collections::BTreeMap;
@@ -378,8 +379,15 @@ impl<'src, 'ast> CompileGlobals<'src, 'ast> {
         minimize: bool,
         allow_push0: bool,
         defs: BTreeMap<&'src str, &'ast Definition<'src>>,
+        overrides: &'ast [ConstantOverride],
     ) -> Self {
-        let constants = evalute_constants(&defs);
+        let mut constants = evalute_constants(&defs);
+        for const_override in overrides {
+            let value = constants
+                .get_mut(const_override.name.as_str())
+                .expect("Overriding missing");
+            *value = const_override.value;
+        }
         Self {
             minimize,
             allow_push0,
@@ -399,20 +407,22 @@ impl<'src, 'ast> CompileGlobals<'src, 'ast> {
     }
 }
 
-fn evalute_constants<'a>(global_defs: &BTreeMap<&'a str, &Definition>) -> BTreeMap<&'a str, U256> {
+fn evalute_constants<'a>(
+    global_defs: &BTreeMap<&'a str, &Definition<'a>>,
+) -> BTreeMap<&'a str, U256> {
     let mut free_pointer = 0u32;
     global_defs
         .iter()
         .filter_map(|(name, def)| match def {
-            Definition::Constant { name: _, expr } => Some((name, expr)),
+            Definition::Constant(constant) => Some((*name, &constant.expr)),
             _ => None,
         })
         .map(|(name, expr)| match expr.0 {
-            ConstExpr::Value(v) => (*name, v),
+            ConstExpr::Value(v) => (name, v),
             ConstExpr::FreeStoragePointer => {
                 let current = free_pointer;
                 free_pointer += 1;
-                (*name, U256::from(current))
+                (name, U256::from(current))
             }
         })
         .collect()
