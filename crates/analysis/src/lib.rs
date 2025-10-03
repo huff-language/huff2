@@ -507,10 +507,10 @@ mod test {
             takes_returns: None,
             body: Box::new([]),
         });
-        let d2 = Definition::Constant {
+        let d2 = Definition::Constant(Constant {
             name: ("TheWhat", span),
             expr: (ConstExpr::FreeStoragePointer, span),
-        };
+        });
 
         let unrelated_table = Definition::CodeTable {
             name: ("awesome_stuff", span),

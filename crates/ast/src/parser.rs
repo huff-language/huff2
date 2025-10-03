@@ -415,6 +415,7 @@ fn punct<'tokens, 'src: 'tokens>(c: char) -> impl Parser<'tokens, 'src, Token<'s
 mod tests {
     use super::*;
     use alloy_primitives::uint;
+    use ast::*;
     use chumsky::input::Input;
 
     /// Macro to assert that a parser successfully parses a given set of tokens
@@ -502,10 +503,10 @@ mod tests {
         assert_ok!(
             root_section(),
             vec![Keyword("define"), Ident("constant"), Ident("TEST"), Punct('='), Hex("0x1")],
-            ast::RootSection::Definition(ast::Definition::Constant {
+            ast::RootSection::Definition(ast::Definition::Constant(Constant {
                 name: ("TEST", span),
                 expr: (ast::ConstExpr::Value(uint!(1_U256)), span)
-            })
+            }))
         );
     }
 
@@ -633,10 +634,10 @@ mod tests {
         assert_ok!(
             constant(),
             vec![Ident("constant"), Ident("TEST"), Punct('='), Hex("0x1")],
-            ast::Definition::Constant {
+            ast::Definition::Constant(Constant {
                 name: ("TEST", span),
                 expr: (ast::ConstExpr::Value(uint!(1_U256)), span)
-            }
+            })
         );
     }
 
@@ -654,10 +655,10 @@ mod tests {
                 Punct('('),
                 Punct(')')
             ],
-            ast::Definition::Constant {
+            Definition::Constant(Constant {
                 name: ("VAR_LOCATION", span),
                 expr: (ast::ConstExpr::FreeStoragePointer, span)
-            }
+            })
         );
     }
 
