@@ -83,8 +83,8 @@ pub fn generate_for_entrypoint<'src, 'ast: 'src>(
     });
     let included_code_tables: Vec<IncludedCodeTable<'src, 'ast>> = globals
         .defs
-        .iter()
-        .filter_map(|(_, def)| {
+        .values()
+        .filter_map(|def| {
             let Definition::CodeTable { name, data } = def else {
                 return None;
             };
