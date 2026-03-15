@@ -30,8 +30,8 @@ struct CliArguments {
     #[clap(
         short = 'e',
         long = "evm-version",
-        help = "What EVM version to use, NOTE: Pre-EOF this option only affects the use of PUSH0.",
-        default_value = "paris"
+        help = "paris => no `PUSH0`; shanghai/cancun => with `PUSH0`",
+        default_value = "cancun"
     )]
     evm_version: EvmVersion,
 
